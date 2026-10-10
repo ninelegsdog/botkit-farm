@@ -46,6 +46,11 @@ jobs:
           python -m playwright install --with-deps chromium
           pytest -m "not slow"
 
+      - name: Связность базы знаний
+        # Битая wikilink хуже отсутствующей заметки: читатель идёт по ней и не
+        # находит ничего. Проверка живёт рядом с базой и запускается на каждый PR.
+        run: python3 obsidian/_check_links.py
+
       - name: Bandit (безопасность)
         run: bandit -c pyproject.toml -r src/botkit_farm
 

@@ -26,6 +26,15 @@ repos:
         files: ^src/
         additional_dependencies: [pydantic, types-PyYAML]
 
+  - repo: local
+    hooks:
+      - id: obsidian-links
+        name: связность базы знаний
+        entry: python3 obsidian/_check_links.py
+        language: system
+        files: ^obsidian/.*\.md$
+        pass_filenames: false
+
   # Секреты: бот может показать свой .env в ответе, а отчёт уезжает в git.
   - repo: https://github.com/gitleaks/gitleaks
     rev: v8.24.0
