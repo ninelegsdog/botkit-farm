@@ -1,0 +1,35 @@
+[
+  {
+    "kind": "step",
+    "text": "написать «/start»",
+    "replies": ["Добро пожаловать"],
+    "messages": ["Добро пожаловать"],
+    "toasts": [],
+    "media": [],
+    "buttons": ["Записаться"]
+  },
+  {
+    "kind": "step",
+    "text": "нажать «Прайс»",
+    "replies": ["Прайс-лист", "Скоро ответим"],
+    "messages": ["Прайс-лист"],
+    "toasts": ["Скоро ответим"],
+    "media": [
+      {
+        "kind": "document",
+        "file_id": "FAKE-DOC",
+        "caption": "Прайс"
+      }
+    ],
+    "buttons": []
+  },
+  {
+    "kind": "no_button",
+    "label": "нажать «Купить»",
+    "known": ["Далее", "Назад"]
+  },
+  {
+    "kind": "crash",
+    "error": "AttributeError: NoneType"
+  }
+]

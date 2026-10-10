@@ -23,9 +23,11 @@ import pathlib
 import subprocess
 import tempfile
 from dataclasses import dataclass
-from typing import Any
+
+from pydantic import ValidationError
 
 from botkit_farm import security
+from botkit_farm.runner.contract import HostTurn, parse_turns
 
 # Скрипт-хост: поднимает бота, кормит его Update'ами и печатает результат в JSON.
 _HOST = """
@@ -176,10 +178,21 @@ asyncio.run(main())
 
 @dataclass
 class ExecResult:
-    """Что вернул подпроцесс."""
+    """Что вернул подпроцесс.
 
-    turns: list[dict[str, Any]]
+    `turns` типизированы контрактом: разбор JSON — это и есть проверка границы
+    хост↔движок, и он делается один раз здесь, а не размазывается по движку.
+    """
+
+    turns: list[HostTurn]
     error: str = ""
+
+
+def _contract_error(exc: ValidationError) -> str:
+    """Понятная причина нарушения контракта: имя поля и что случилось."""
+    first = exc.errors()[0]
+    loc = ".".join(str(p) for p in first["loc"]) or "<корень>"
+    return f"транскрипция хоста не соответствует контракту: поле {loc}: {first['msg']}"
 
 
 def run_bot(
@@ -190,7 +203,7 @@ def run_bot(
     adapter: str,
     port: int,
     fixture: pathlib.Path | None,
-    steps: list[dict[str, Any]],
+    steps: list[dict[str, object]],
     db_path: pathlib.Path,
     redis_url: str = "redis://127.0.0.1:6380/0",
     timeout: int = 300,
@@ -247,7 +260,12 @@ def run_bot(
             tail = "\n".join(err[-12:]) if err else "(пустой вывод)"
             return ExecResult(turns=[], error=f"бот не отработал:\n{tail}")
 
-        return ExecResult(turns=json.loads(result_file.read_text(encoding="utf-8")))
+        raw = json.loads(result_file.read_text(encoding="utf-8"))
+        try:
+            turns = parse_turns(raw)
+        except ValidationError as exc:
+            return ExecResult(turns=[], error=_contract_error(exc))
+        return ExecResult(turns=turns)
 
 
 __all__ = ["ExecResult", "run_bot"]

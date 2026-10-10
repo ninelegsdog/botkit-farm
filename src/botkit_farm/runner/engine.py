@@ -19,6 +19,7 @@ from botkit_farm import fixtures as fx
 from botkit_farm import security
 from botkit_farm.case.model import Case, Expect
 from botkit_farm.inspector.repo import detect_builder
+from botkit_farm.runner.contract import CrashTurn, HostTurn, NoButtonTurn
 from botkit_farm.runner.host import ExecResult, run_bot
 from botkit_farm.runner.result import CaseResult, Failure, Status, Turn
 
@@ -226,26 +227,24 @@ def _to_steps(case: Case, default_gap: float) -> list[dict[str, Any]]:
     return out
 
 
-def _consume(turns: list[dict[str, Any]], case: Case, result: CaseResult) -> Status:
+def _consume(turns: list[HostTurn], case: Case, result: CaseResult) -> Status:
     """Разобрать транскрипцию: собрать реплики, сверить ожидания, вынести вердикт."""
     status = Status.PASSED
     idx = 0
     for turn in turns:
-        kind = turn.get("kind")
-
-        if kind == "crash":
+        if isinstance(turn, CrashTurn):
             result.status = Status.ERRORED
-            result.error = f"бот упал: {turn.get('error')}"
+            result.error = f"бот упал: {turn.error}"
             return Status.ERRORED
 
-        if kind == "no_button":
+        if isinstance(turn, NoButtonTurn):
             result.failures.append(
                 Failure(
                     idx,
-                    f"нажать «{turn['label']}»",
+                    f"нажать «{turn.label}»",
                     "no_such_button",
-                    f"кнопка «{turn['label']}»",
-                    "бот предлагал: " + "; ".join(turn.get("known", [])),
+                    f"кнопка «{turn.label}»",
+                    "бот предлагал: " + "; ".join(turn.known),
                     "подпись сверьте с инспектором или с ответом бота",
                 )
             )
@@ -256,14 +255,14 @@ def _consume(turns: list[dict[str, Any]], case: Case, result: CaseResult) -> Sta
             idx += 1
             continue
 
-        if kind != "step":
-            continue
+        # Союз исчерпан: остаётся только StepTurn (crash и no_button обработаны
+        # выше), поэтому ветка разбора ответа безусловна.
 
         # Кнопки и ответы уже отфильтрованы хостом; текст клиента добавляем сами.
-        result.turns.append(Turn(text=turn.get("text", ""), out=True))
-        replies = turn.get("replies") or []
-        toasts = turn.get("toasts") or []
-        buttons = [b for b in (turn.get("buttons") or []) if b]
+        result.turns.append(Turn(text=turn.text, out=True))
+        replies = turn.replies
+        toasts = turn.toasts
+        buttons = [b for b in turn.buttons if b]
         # Всплывающие уведомления попадают в кадр отдельной репликой и помечаются:
         # в Telegram это отдельный элемент интерфейса, и стирать разницу нельзя.
         for toast in toasts:
@@ -272,11 +271,11 @@ def _consume(turns: list[dict[str, Any]], case: Case, result: CaseResult) -> Sta
         # и последним он оказывался бы продублированным. В Telegram сообщение
         # остаётся в ленте, а всплывающее — нет: разница видима.
         #
-        # Если поля messages нет вовсе (другой хост, старая версия), берём replies
-        # за вычетом тостов. Молча рисовать пустоту нельзя: кейс прошёл бы, а
-        # кадр остался бы без ответа бота.
-        if "messages" in turn:
-            messages = list(turn["messages"])
+        # Если поля messages хост не прислал вовсе (ранняя версия), берём replies
+        # за вычетом тостов. Молча рисовать пустоту нельзя: кейс прошёл бы, а кадр
+        # остался бы без ответа бота.
+        if "messages" in turn.model_fields_set:
+            messages = list(turn.messages)
         else:
             messages = [r for r in replies if r not in toasts]
         if messages:

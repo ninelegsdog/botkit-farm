@@ -13,7 +13,13 @@ import pytest
 
 from botkit_farm.case.model import Case, Expect
 from botkit_farm.runner import engine
+from botkit_farm.runner.contract import parse_turns
 from botkit_farm.runner.result import CaseResult, Status
+
+
+def _turns(*raw: dict[str, Any]) -> list[Any]:
+    """Собрать транскрипцию через настоящий контракт, а не подделку-словарь."""
+    return parse_turns(list(raw))
 
 
 def _case(*steps: Any, **kw: Any) -> Case:
@@ -165,7 +171,9 @@ def test_все_ожидания_сошлись():
         {"send": "/start", "expect": {"text_contains": ["Запись"]}},
         {"click": "Далее", "expect": {"buttons_contains": ["Готово"]}},
     )
-    turns = [_turn("написать «/start»", ["Запись"]), _turn("нажать «Далее»", ["Ок"], ["Готово"])]
+    turns = _turns(
+        _turn("написать «/start»", ["Запись"]), _turn("нажать «Далее»", ["Ок"], ["Готово"])
+    )
     res = _result()
     assert engine._consume(turns, case, res) is Status.PASSED
     assert res.ok
@@ -174,7 +182,7 @@ def test_все_ожидания_сошлись():
 def test_несовпадение_даёт_failed():
     case = _case({"send": "/start", "expect": {"text_contains": ["Запись"]}})
     res = _result()
-    assert engine._consume([_turn("x", ["Другое"])], case, res) is Status.FAILED
+    assert engine._consume(_turns(_turn("x", ["Другое"])), case, res) is Status.FAILED
     assert res.status is Status.FAILED
     assert res.failures
 
@@ -182,7 +190,7 @@ def test_несовпадение_даёт_failed():
 def test_падение_бота_даёт_errored():
     case = _case({"send": "/start", "expect": {"text_contains": ["x"]}})
     res = _result()
-    turns = [{"kind": "crash", "error": "AttributeError: NoneType"}]
+    turns = _turns({"kind": "crash", "error": "AttributeError: NoneType"})
     assert engine._consume(turns, case, res) is Status.ERRORED
     assert "AttributeError" in (res.error or "")
 
@@ -190,7 +198,7 @@ def test_падение_бота_даёт_errored():
 def test_отсутствующая_кнопка_даёт_подсказку():
     case = _case({"click": "Купить", "expect": {"buttons_contains": ["Ок"]}})
     res = _result()
-    turns = [{"kind": "no_button", "label": "нажать «Купить»", "known": ["Ок", "Далее"]}]
+    turns = _turns({"kind": "no_button", "label": "нажать «Купить»", "known": ["Ок", "Далее"]})
     assert engine._consume(turns, case, res) is Status.FAILED
     assert "Далее" in res.failures[0].actual
 
@@ -202,7 +210,7 @@ def test_optional_шаг_не_роняет_кейс():
         {"send": "/done", "expect": {"text_contains": ["Готово"]}},
     )
     res = _result()
-    turns = [_turn("нажать «Купить»", ["Другое"]), _turn("написать «/done»", ["Готово"])]
+    turns = _turns(_turn("нажать «Купить»", ["Другое"]), _turn("написать «/done»", ["Готово"]))
     assert engine._consume(turns, case, res) is Status.PASSED
     assert res.failures, "несовпадение должно быть записано, даже если шаг optional"
 
@@ -210,7 +218,7 @@ def test_optional_шаг_не_роняет_кейс():
 def test_диалог_собирается_для_кадра():
     case = _case({"send": "/start", "expect": {"silent": True}})
     res = _result()
-    engine._consume([_turn("написать «/start»", ["Привет"], ["Далее"])], case, res)
+    engine._consume(_turns(_turn("написать «/start»", ["Привет"], ["Далее"])), case, res)
     kinds = [t.out for t in res.turns]
     assert kinds == [True, False], "в кадре нужны и реплика клиента, и ответ бота"
     assert res.turns[1].buttons == ["Далее"]
@@ -237,7 +245,7 @@ def test_тост_попадает_в_кадр_отдельно():
     молча терялся: кейс писал «бот промолчал», и это была ложь в отчёте."""
     case = _case({"click": "В корзину", "expect": {"text_contains": ["Добавлено"]}})
     res = _result()
-    turns = [
+    turns = _turns(
         {
             "kind": "step",
             "text": "нажать",
@@ -245,7 +253,7 @@ def test_тост_попадает_в_кадр_отдельно():
             "messages": [],
             "toasts": ["Добавлено в корзину!"],
         }
-    ]
+    )
     assert engine._consume(turns, case, res) is Status.PASSED
     assert [t.is_toast for t in res.turns] == [False, True], "тост должен быть помечен"
 
@@ -255,7 +263,7 @@ def test_тост_не_дублируется_как_сообщение():
     В кадре это выглядит как «бот ответил дважды»."""
     case = _case({"click": "В корзину", "expect": {"text_contains": ["Добавлено"]}})
     res = _result()
-    turns = [
+    turns = _turns(
         {
             "kind": "step",
             "text": "нажать",
@@ -263,7 +271,7 @@ def test_тост_не_дублируется_как_сообщение():
             "messages": [],
             "toasts": ["Добавлено в корзину!"],
         }
-    ]
+    )
     engine._consume(turns, case, res)
     bot_texts = [t.text for t in res.turns if not t.out]
     assert bot_texts == ["Добавлено в корзину!"], f"тост продублирован: {bot_texts}"
@@ -272,7 +280,7 @@ def test_тост_не_дублируется_как_сообщение():
 def test_сообщение_и_тост_вместе_рисуются_оба():
     case = _case({"click": "Далее", "expect": {"text_contains": ["Ок"]}})
     res = _result()
-    turns = [
+    turns = _turns(
         {
             "kind": "step",
             "text": "нажать",
@@ -280,7 +288,7 @@ def test_сообщение_и_тост_вместе_рисуются_оба():
             "messages": ["Заказ создан"],
             "toasts": ["Сохранено"],
         }
-    ]
+    )
     engine._consume(turns, case, res)
     texts = [t.text for t in res.turns if not t.out]
     assert texts == ["Сохранено", "Заказ создан"]
@@ -289,7 +297,7 @@ def test_сообщение_и_тост_вместе_рисуются_оба():
 def test_пустой_ответ_не_рисуется():
     case = _case({"send": "ping", "expect": {"silent": True}})
     res = _result()
-    turns = [{"kind": "step", "text": "ping", "replies": [], "messages": [], "toasts": []}]
+    turns = _turns({"kind": "step", "text": "ping", "replies": [], "messages": [], "toasts": []})
     assert engine._consume(turns, case, res) is Status.PASSED
     assert len(res.turns) == 1, "ответов не было — рисуется только реплика клиента"
 
@@ -299,6 +307,6 @@ def test_старый_хост_без_messages_не_ломает_как():
     из replies, и прогон не падает на несовпадении формата."""
     case = _case({"send": "ping", "expect": {"text_contains": ["Ок"]}})
     res = _result()
-    turns = [{"kind": "step", "text": "ping", "replies": ["Ок"]}]
+    turns = _turns({"kind": "step", "text": "ping", "replies": ["Ок"]})
     assert engine._consume(turns, case, res) is Status.PASSED
     assert any(t.text == "Ок" for t in res.turns)
