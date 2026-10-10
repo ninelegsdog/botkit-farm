@@ -1,0 +1,79 @@
+# Кейс написан по коду src/booking/handlers.py, а не по догадке. Разбор:
+#   botkit-farm study ~/BOTKIT-FARM/bots/botkit-bookingbot
+#
+#   /start                    → handlers.py:25  «Выберите действие» + 2 кнопки
+#   book:services             → handlers.py:38  edit «Выберите услугу:» + услуги
+#   book:service:<id>         → handlers.py:54  edit «Выберите дату:» + до 10 дат
+#   book:date:<id>:<дата>     → handlers.py:65  edit «Выберите время:» + слоты
+#   book:slot:<id>:<слот>     → handlers.py:96  edit «Введите телефон (…)»
+#   текст-телефон             → handlers.py:104 answer «✅ Запись #N подтверждена!»
+#
+# Важно про edit_text: бот не «присылает» сообщения, а ЗАМЕНЯет прежнее
+# (edit_message_text). Поэтому на каждом шаге проверяется текст последнего
+# сообщения — того, что клиент видит на экране.
+
+id: booking-happy-path
+title: Запись клиента — полный путь
+description: >-
+  Клиент открывает бота, выбирает услугу, дату и время, вводит телефон и
+  получает подтверждение. Это путь, который продаётся, поэтому он обязан
+  работать целиком, а не наполовину.
+source: https://github.com/ninelegsdog/botkit-bookingbot
+builder: legacy
+fixture: bookingbot
+
+# Фикстура обязательна: без услуг в базе бот ответит «Нет доступных услуг»,
+# и кейс проверит не запись, а ветку ошибки.
+seed: true
+
+frame: window
+frame_title: BookingBot · запись
+frame_handle: "@SaasBookingKitBot"
+publishable: true
+
+tags: [smoke, ui]
+covers: booking-flow
+
+steps:
+  # Стартовое меню: обе кнопки из handlers.py:32-34.
+  - send: "/start"
+    expect:
+      text_contains: ["Выберите действие"]
+      buttons_contains: ["📅 Записаться", "🗓 Мои записи"]
+
+  # Услуги: бот ЗАМЕНЯЕТ сообщение на «Выберите услугу:» и вешает по кнопке
+  # на услугу. Состав услуг задаёт фикстура, но владелец может её пополнить,
+  # поэтому проверяем число кнопок, а не их текст.
+  - click: "📅 Записаться"
+    pause: 2.5
+    expect:
+      text_contains: ["Выберите услугу:"]
+      buttons_count: 3
+
+  # Даты: до 10 штук вперёд (handlers.py:66, срез dates[:10]).
+  - click: "Стрижка и укладка — 60 мин, 2200₽"
+    pause: 2.5
+    expect:
+      text_contains: ["Выберите дату:"]
+      buttons_count: 10
+
+  # Дата: бот показывает даты на 14 дней вперёд, и они каждый день разные,
+  # поэтому нажимаем ПЕРВУЮ предложенную, а не зашитую в кейс.
+  - pick: first
+    pause: 2.5
+    expect:
+      text_contains: ["Выберите время:"]
+
+  # Слот: окна задаёт фикстура (10:00, 12:00, 15:00, 17:00), берём первый.
+  - pick: first
+    pause: 2.5
+    expect:
+      text_contains: ["Введите телефон"]
+
+  # Телефон: бот создаёт запись и подтверждает её (handlers.py:104-129).
+  # Номер вымышленный и тестовый — настоящих ПДн в кадре быть не должно.
+  - send: "+7 (999) 000-00-00"
+    pause: 2.5
+    expect:
+      text_contains: ["подтверждена"]
+      buttons_contains: ["📅 Записаться"]
