@@ -50,6 +50,9 @@ class Turn:
     text: str
     out: bool  # True — клиент, False — бот
     buttons: list[str] = field(default_factory=list)
+    # Всплывающее уведомление (answerCallbackQuery): клиент видит его как
+    # отдельный элемент, и в кадре оно рисуется иначе, чем обычное сообщение.
+    is_toast: bool = False
 
 
 @dataclass
@@ -87,7 +90,7 @@ class CaseResult:
         """
         lines = []
         for i, t in enumerate(self.turns):
-            who = "клиент" if t.out else "бот   "
+            who = "клиент" if t.out else ("всплыв." if t.is_toast else "бот   ")
             extra = f"  [{'; '.join(t.buttons)}]" if t.buttons else ""
             lines.append(f"{i:>2} {who}: {t.text}{extra}")
         return "\n".join(lines)

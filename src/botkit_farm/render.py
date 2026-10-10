@@ -187,6 +187,15 @@ main {{ flex:1; padding:14px 14px 10px; display:flex; flex-direction:column; gap
   padding:8px 10px; border-radius:14px; background:{BTN_BG};
   border:1px solid {BTN_BORDER}; color:{ACCENT}; font-size:15px;
 }}
+
+/* Всплывающее уведомление Telegram: тёмная плашка с закруглёнными краями,
+   появляется поверх чата и не занимает места в ленте сообщений. */
+.toast {{
+  align-self:center; margin:2px auto;
+  max-width:60%; padding:7px 14px; border-radius:11px;
+  background:#202b36; color:{IN_TEXT}; font-size:0.92em;
+  box-shadow:0 2px 8px rgba(0,0,0,0.35); text-align:center;
+}}
 .wm {{
   position:absolute; left:14px; bottom:10px;
   font-size:12px; color:#566372; background:rgba(11,20,26,0.62);
@@ -235,6 +244,15 @@ body.win {{ font-family:{FONT_STACK}; -webkit-font-smoothing:antialiased; }}
   position:absolute; left:{TITLE_X}px; top:{TITLE_Y}px;
   font-size:{TITLE_FONT}px; line-height:{TITLE_FONT + 4}px;
   color:{IN_TEXT}; font-weight:600;
+}}
+
+/* Всплывающее уведомление Telegram: тёмная плашка с закруглёнными краями,
+   появляется поверх чата и не занимает места в ленте сообщений. */
+.toast {{
+  align-self:center; margin:2px auto;
+  max-width:60%; padding:7px 14px; border-radius:11px;
+  background:#202b36; color:{IN_TEXT}; font-size:0.92em;
+  box-shadow:0 2px 8px rgba(0,0,0,0.35); text-align:center;
 }}
 .wm {{
   position:absolute; left:104px; bottom:{WINDOW_H - CHAT_BOTTOM + 12}px;
@@ -306,6 +324,10 @@ def _bubble_row(
     turn: dict[str, Any], idx: int = 0, *, phone: bool = False, window: bool = False
 ) -> str:
     cls = "row out" if turn["out"] else "row"
+    if turn.get("is_toast"):
+        # Всплывающее уведомление в Telegram — отдельный элемент поверх чата:
+        # без собственного оформления кадр врал бы о том, что клиент видит.
+        return f'<div class="toast">{_tg_html(turn["text"])}</div>'
     body = _tg_html(turn["text"])
     if window:
         # В окне Telegram время — часть последней строки пузыря, поэтому оно

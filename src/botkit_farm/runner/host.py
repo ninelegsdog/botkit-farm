@@ -142,11 +142,20 @@ async def main():
                         if btn.get("callback_data") and btn.get("text"):
                             known[btn["callback_data"]] = btn["text"]
             spoken = [c for c in fresh if c.method in ("sendMessage", "editMessageText")]
+            # Всплывающее уведомление (answerCallbackQuery) клиент в Telegram
+            # видит так же, как сообщение, поэтому оно идёт в replies.
+            # Раньше оно молча терялось: бот «отвечал», а кейс писал «бот молчал» —
+            # и это была бы ложь в отчёте.
+            toasts = [c.payload.get("text", "") for c in fresh
+                      if c.method == "answerCallbackQuery"
+                      and c.payload.get("text")]
             last_buttons = [b.get("callback_data", "") for c in spoken
                             for row in (c.payload.get("reply_markup") or {{}}).get("inline_keyboard") or []
                             for b in row if b.get("callback_data")]
             turns.append({{"kind": "step", "text": step["label"],
-                           "replies": [c.payload.get("text", "") for c in spoken],
+                           "replies": [c.payload.get("text", "") for c in spoken] + toasts,
+                           "messages": [c.payload.get("text", "") for c in spoken],
+                           "toasts": toasts,
                            "buttons": [b.get("text", "")
                                        for c in spoken
                                        for row in (c.payload.get("reply_markup") or {{}}).get("inline_keyboard") or []

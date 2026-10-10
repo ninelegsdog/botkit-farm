@@ -134,7 +134,12 @@ def _check(
 
 
 def run_case(
-    case: Case, *, bot_dir: pathlib.Path, cache_dir: pathlib.Path, default_gap: float = DEFAULT_GAP
+    case: Case,
+    *,
+    bot_dir: pathlib.Path,
+    cache_dir: pathlib.Path,
+    work_dir: pathlib.Path,
+    default_gap: float = DEFAULT_GAP,
 ) -> CaseResult:
     """Прогнать один кейс целиком.
 
@@ -143,6 +148,9 @@ def run_case(
     разбор — работа, ради которой ферма существует.
     """
     started = time.monotonic()
+    # Абсолютный путь обязателен: бот делает os.chdir(bot_dir) при сборке, и любой
+    # относительный путь после этого указывает уже в другую директорию.
+    bot_dir = bot_dir.resolve()
     result = CaseResult(
         case_id=case.id,
         title=case.title,
@@ -163,9 +171,14 @@ def run_case(
         port = _api_port(case.id)
         # БД начинается с нуля на каждый прогон: иначе второй запуск продолжил бы
         # диалог с середины, и кейс падал бы не из-за кода бота.
-        work = bot_dir.parent.parent / ".work"
-        work.mkdir(parents=True, exist_ok=True)
-        db_path = work / f"{case.id}.db"
+        #
+        # work_dir приходит извне, а не выводится из bot_dir. Вывод был ошибкой:
+        # при относительном bot_dir получался относительный work_dir, а бот
+        # делает os.chdir в свой каталог — и sqlite искал БД уже относительно
+        # bot_dir, то есть в несуществующем bots/<имя>/.work/. Явный параметр
+        # убирает весь класс таких ошибок, а не одну.
+        work_dir.mkdir(parents=True, exist_ok=True)
+        db_path = (work_dir / f"{case.id}.db").resolve()
         db_path.unlink(missing_ok=True)
 
         execr: ExecResult = run_bot(
@@ -249,9 +262,25 @@ def _consume(turns: list[dict[str, Any]], case: Case, result: CaseResult) -> Sta
         # Кнопки и ответы уже отфильтрованы хостом; текст клиента добавляем сами.
         result.turns.append(Turn(text=turn.get("text", ""), out=True))
         replies = turn.get("replies") or []
+        toasts = turn.get("toasts") or []
         buttons = [b for b in (turn.get("buttons") or []) if b]
-        if replies:
-            result.turns.append(Turn(text=replies[-1], out=False, buttons=buttons))
+        # Всплывающие уведомления попадают в кадр отдельной репликой и помечаются:
+        # в Telegram это отдельный элемент интерфейса, и стирать разницу нельзя.
+        for toast in toasts:
+            result.turns.append(Turn(text=str(toast), out=False, is_toast=True))
+        # Сообщение рисуем из messages, а не из replies: в replies входит и тост,
+        # и последним он оказывался бы продублированным. В Telegram сообщение
+        # остаётся в ленте, а всплывающее — нет: разница видима.
+        #
+        # Если поля messages нет вовсе (другой хост, старая версия), берём replies
+        # за вычетом тостов. Молча рисовать пустоту нельзя: кейс прошёл бы, а
+        # кадр остался бы без ответа бота.
+        if "messages" in turn:
+            messages = list(turn["messages"])
+        else:
+            messages = [r for r in replies if r not in toasts]
+        if messages:
+            result.turns.append(Turn(text=messages[-1], out=False, buttons=buttons))
 
         step = case.steps[min(idx, len(case.steps) - 1)]
         result.steps_done = idx + 1

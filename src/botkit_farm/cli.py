@@ -35,6 +35,7 @@ CASES_DIR = ROOT / "cases"
 BOTS_DIR = ROOT / "bots"
 REPORTS_DIR = ROOT / "reports"
 ENVS_DIR = ROOT / "envs"
+WORK_DIR = ROOT / ".work"
 
 
 # ── doctor ──────────────────────────────────────────────────────────────────
@@ -172,7 +173,10 @@ async def _shoot(case: Any, result: CaseResult) -> None:
         return
     from botkit_farm import render
 
-    turns = [{"text": t.text, "out": t.out, "buttons": t.buttons} for t in result.turns]
+    turns = [
+        {"text": t.text, "out": t.out, "buttons": t.buttons, "is_toast": t.is_toast}
+        for t in result.turns
+    ]
     frames = REPORTS_DIR / "frames"
     png = frames / f"{case.id}{'-fail' if not result.ok else ''}.png"
     mode: dict[str, Any] = {
@@ -217,6 +221,7 @@ async def _run_one(case_path: pathlib.Path, ref: str | None) -> CaseResult | Non
             case,
             bot_dir=src.path,
             cache_dir=ENVS_DIR,
+            work_dir=WORK_DIR,
         )
         await _shoot(case, result)
         report = write_report(result, REPORTS_DIR)

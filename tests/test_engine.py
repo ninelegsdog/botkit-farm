@@ -141,8 +141,23 @@ def _result() -> CaseResult:
     return CaseResult(case_id="c", title="t", status=Status.PASSED, steps_total=3)
 
 
-def _turn(text: str, replies: list[str], buttons: list[str] | None = None) -> dict[str, Any]:
-    return {"kind": "step", "text": text, "replies": replies, "buttons": buttons or []}
+def _turn(
+    text: str,
+    replies: list[str],
+    buttons: list[str] | None = None,
+    toasts: list[str] | None = None,
+) -> dict[str, Any]:
+    """Повторяет формат настоящего хоста: replies (всё), messages и toasts."""
+    toasts = toasts or []
+    messages = [r for r in replies if r not in toasts]
+    return {
+        "kind": "step",
+        "text": text,
+        "replies": replies,
+        "messages": messages,
+        "toasts": toasts,
+        "buttons": buttons or [],
+    }
 
 
 def test_все_ожидания_сошлись():
@@ -212,3 +227,78 @@ def test_builder_из_кейса_используется(tmp_path):
 def test_неизвестный_builder_отвергается(tmp_path):
     with pytest.raises(engine.RunError):
         engine._adapter_for(_case(), tmp_path)
+
+
+# ── всплывающие уведомления (answerCallbackQuery) ──────────────────────────
+
+
+def test_тост_попадает_в_кадр_отдельно():
+    """answerCallbackQuery — это ответ бота, который клиент видит. Раньше он
+    молча терялся: кейс писал «бот промолчал», и это была ложь в отчёте."""
+    case = _case({"click": "В корзину", "expect": {"text_contains": ["Добавлено"]}})
+    res = _result()
+    turns = [
+        {
+            "kind": "step",
+            "text": "нажать",
+            "replies": ["Добавлено в корзину!"],
+            "messages": [],
+            "toasts": ["Добавлено в корзину!"],
+        }
+    ]
+    assert engine._consume(turns, case, res) is Status.PASSED
+    assert [t.is_toast for t in res.turns] == [False, True], "тост должен быть помечен"
+
+
+def test_тост_не_дублируется_как_сообщение():
+    """Регресс: тост и сообщение рисовались двумя репликами с одинаковым текстом.
+    В кадре это выглядит как «бот ответил дважды»."""
+    case = _case({"click": "В корзину", "expect": {"text_contains": ["Добавлено"]}})
+    res = _result()
+    turns = [
+        {
+            "kind": "step",
+            "text": "нажать",
+            "replies": ["Добавлено в корзину!"],
+            "messages": [],
+            "toasts": ["Добавлено в корзину!"],
+        }
+    ]
+    engine._consume(turns, case, res)
+    bot_texts = [t.text for t in res.turns if not t.out]
+    assert bot_texts == ["Добавлено в корзину!"], f"тост продублирован: {bot_texts}"
+
+
+def test_сообщение_и_тост_вместе_рисуются_оба():
+    case = _case({"click": "Далее", "expect": {"text_contains": ["Ок"]}})
+    res = _result()
+    turns = [
+        {
+            "kind": "step",
+            "text": "нажать",
+            "replies": ["Заказ создан", "Сохранено"],
+            "messages": ["Заказ создан"],
+            "toasts": ["Сохранено"],
+        }
+    ]
+    engine._consume(turns, case, res)
+    texts = [t.text for t in res.turns if not t.out]
+    assert texts == ["Сохранено", "Заказ создан"]
+
+
+def test_пустой_ответ_не_рисуется():
+    case = _case({"send": "ping", "expect": {"silent": True}})
+    res = _result()
+    turns = [{"kind": "step", "text": "ping", "replies": [], "messages": [], "toasts": []}]
+    assert engine._consume(turns, case, res) is Status.PASSED
+    assert len(res.turns) == 1, "ответов не было — рисуется только реплика клиента"
+
+
+def test_старый_хост_без_messages_не_ломает_как():
+    """Хост ранних версий не отдаёт поле messages — тогда берём последний ответ
+    из replies, и прогон не падает на несовпадении формата."""
+    case = _case({"send": "ping", "expect": {"text_contains": ["Ок"]}})
+    res = _result()
+    turns = [{"kind": "step", "text": "ping", "replies": ["Ок"]}]
+    assert engine._consume(turns, case, res) is Status.PASSED
+    assert any(t.text == "Ок" for t in res.turns)
