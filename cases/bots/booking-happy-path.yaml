@@ -12,6 +12,7 @@
 # (edit_message_text). Поэтому на каждом шаге проверяется текст последнего
 # сообщения — того, что клиент видит на экране.
 
+schema_version: 1
 id: booking-happy-path
 title: Запись клиента — полный путь
 description: >-

@@ -1,9 +1,9 @@
-"""CLI фермы: study, run, list, doctor, init.
+"""CLI фермы: study, run, list, doctor, init, migrate.
 
-Один вход, пять команд, и каждая отвечает на один вопрос владельца:
+Один вход, шесть команд, и каждая отвечает на один вопрос владельца:
 `study` — «что этот бот умеет», `list` — «какие кейсы есть», `run` — «работает
 ли бот», `doctor` — «почему не работает стенд», `init` — «как завести кейсы
-рядом с ботом».
+рядом с ботом», `migrate` — «схема кейсов ещё та, что мы ждём».
 
 Про `doctor` отдельно: почти каждая «ферма не работает» — это не баг, а
 неподнятый Redis или отсутствующая подложка. Диагностика, которая называет
@@ -168,6 +168,70 @@ def _init(target: str, builder: str | None) -> int:
     print(f"  фикстуры:   {pack.fixtures_dir}")
     print("\nПоложите YAML-кейсы в каталог кейсов и запустите: botkit-farm run --pack .")
     return 0
+
+
+# ── migrate ─────────────────────────────────────────────────────────────────
+
+
+def _migrate(target: str, check: bool) -> int:
+    """Привести кейсы к текущей версии схемы.
+
+    `--check` ничего не пишет и падает, если хоть один кейс не на текущей версии
+    — это шаг CI: схема кейса не должна незаметно разъехаться с фермой. Кейс с
+    более новой схемой — ошибка с номером версии, а не молчаливый пропуск.
+    """
+    import yaml
+
+    from botkit_farm.case.migration import (
+        SCHEMA_VERSION,
+        SchemaError,
+        migrate_file,
+        needs_migration,
+        version_of,
+    )
+
+    root = pathlib.Path(target).expanduser()
+    if not root.exists():
+        print(f"путь не найден: {root}")
+        return 2
+    paths = sorted(root.rglob("*.y*ml")) if root.is_dir() else [root]
+    if not paths:
+        print(f"кейсов не найдено: {root}")
+        return 0
+
+    changed = stale = errored = 0
+    for path in paths:
+        try:
+            raw = yaml.safe_load(path.read_text(encoding="utf-8"))
+            if not isinstance(raw, dict):
+                raise SchemaError("кейс должен быть словарём")
+            version = version_of(raw)
+            if not needs_migration(raw):
+                continue
+        except (SchemaError, OSError) as exc:
+            print(f"  ✗ {path}: {exc}")
+            errored += 1
+            continue
+
+        if check:
+            shown = raw.get("schema_version", f"не проставлена (читается как {version})")
+            print(f"  ✗ {path}: схема {shown}, ферма ждёт {SCHEMA_VERSION}")
+            stale += 1
+            continue
+        try:
+            if migrate_file(path):
+                shown = raw.get("schema_version", f"не проставлена; читалась как {version}")
+                print(f"  ✓ {path}: схема {shown} → {SCHEMA_VERSION}")
+                changed += 1
+        except SchemaError as exc:
+            print(f"  ✗ {path}: {exc}")
+            errored += 1
+
+    if check:
+        print(f"проверено {len(paths)}: устаревших {stale}, ошибок {errored}")
+        return 1 if (stale or errored) else 0
+    print(f"проверено {len(paths)}: обновлено {changed}, ошибок {errored}")
+    return 1 if errored else 0
 
 
 # ── list ────────────────────────────────────────────────────────────────────
@@ -366,6 +430,15 @@ def main(argv: list[str] | None = None) -> int:
     p_run.add_argument("--pack", help="каталог пака или репозиторий бота с .botkit-farm")
     p_run.set_defaults(fn=_run)
 
+    p_migrate = sub.add_parser("migrate", help="привести кейсы к текущей версии схемы")
+    p_migrate.add_argument(
+        "target", nargs="?", default=str(CASES_DIR), help="файл или каталог кейсов"
+    )
+    p_migrate.add_argument(
+        "--check", action="store_true", help="не менять файлы, только проверить (для CI)"
+    )
+    p_migrate.set_defaults(fn=None)
+
     args = ap.parse_args(argv)
     try:
         if args.cmd == "doctor":
@@ -376,6 +449,8 @@ def main(argv: list[str] | None = None) -> int:
             return _list_cases()
         if args.cmd == "init":
             return _init(args.target, args.builder)
+        if args.cmd == "migrate":
+            return _migrate(args.target, args.check)
         return asyncio.run(_run(args))
     except KeyboardInterrupt:
         print("\nпрервано")

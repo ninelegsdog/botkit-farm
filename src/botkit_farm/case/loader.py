@@ -14,6 +14,7 @@ from typing import Any, Literal
 import yaml
 from pydantic import ValidationError
 
+from botkit_farm.case.migration import SchemaError, apply_migrations
 from botkit_farm.case.model import Case, find_placeholders, find_slots
 
 # Каталог пака → происхождение кейса. Словарь даёт и проверку входа, и
@@ -56,6 +57,14 @@ def load_file(path: pathlib.Path) -> Case:
 
     if not isinstance(raw, dict):
         raise CaseError(f"{path}: кейс должен быть словарём, получено {type(raw).__name__}")
+
+    # Схема — публичный контракт с чужим репозиторием: сначала приводим кейс к
+    # текущей версии, и только потом валидируем. Кейс с более новой схемой обязан
+    # отказать с номером версии ([[опыт/lessons]] про молчаливую потерю данных).
+    try:
+        raw = apply_migrations(raw)
+    except SchemaError as exc:
+        raise CaseError(f"{path}: {exc}") from exc
 
     try:
         case = Case.model_validate(raw)

@@ -18,6 +18,8 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from botkit_farm.case.migration import SCHEMA_VERSION
+
 
 class Strict(BaseModel):
     """Общая база: лишнее поле — ошибка, а не тихо проигнорированная опечатка.
@@ -128,7 +130,7 @@ class Step(Strict):
 class Case(Strict):
     """Тест-кейс целиком."""
 
-    schema_version: int | None = 1
+    schema_version: int = Field(default=SCHEMA_VERSION, ge=1)
     origin: Literal["generated", "manual"] | None = None
     status: Literal["active", "removed"] | None = None
 
