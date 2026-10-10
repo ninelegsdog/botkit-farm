@@ -9,12 +9,20 @@
 from __future__ import annotations
 
 import pathlib
-from typing import Any
+from typing import Any, Literal
 
 import yaml
 from pydantic import ValidationError
 
 from botkit_farm.case.model import Case, find_placeholders, find_slots
+
+# Каталог пака → происхождение кейса. Словарь даёт и проверку входа, и
+# типизированное значение: `path.parent.name` — обычная строка, а поле `origin`
+# в модели — литерал.
+_ORIGINS: dict[str, Literal["manual", "generated"]] = {
+    "manual": "manual",
+    "generated": "generated",
+}
 
 
 class CaseError(Exception):
@@ -53,6 +61,13 @@ def load_file(path: pathlib.Path) -> Case:
         case = Case.model_validate(raw)
     except ValidationError as exc:
         raise CaseError(_where(path, exc)) from exc
+
+    # Происхождение кейса: если автор не указал явно, а файл лежит в каталоге
+    # пака `cases/manual` или `cases/generated`, — берём его из расположения.
+    # Так отчёт различает кейс человека и кейс агента, не требуя поля в YAML.
+    origin = _ORIGINS.get(path.parent.name)
+    if case.origin is None and origin is not None:
+        case.origin = origin
 
     # Слоты и заглушки ловим здесь, до запуска бота: незаполненный кейс обязан
     # падать на чтении, иначе он снесёт состояние (базу, FSM) и лишь затем

@@ -1,8 +1,9 @@
-"""CLI фермы: study, run, list, doctor.
+"""CLI фермы: study, run, list, doctor, init.
 
-Один вход, четыре команды, и каждая отвечает на один вопрос владельца:
+Один вход, пять команд, и каждая отвечает на один вопрос владельца:
 `study` — «что этот бот умеет», `list` — «какие кейсы есть», `run` — «работает
-ли бот», `doctor` — «почему не работает стенд».
+ли бот», `doctor` — «почему не работает стенд», `init` — «как завести кейсы
+рядом с ботом».
 
 Про `doctor` отдельно: почти каждая «ферма не работает» — это не баг, а
 неподнятый Redis или отсутствующая подложка. Диагностика, которая называет
@@ -139,6 +140,36 @@ def _study(target: str, as_json: bool) -> int:
     return 0
 
 
+# ── init ────────────────────────────────────────────────────────────────────
+
+
+def _init(target: str, builder: str | None) -> int:
+    """Создать каркас пака `.botkit-farm` в репозитории бота.
+
+    Находит поколение сборки по структуре репозитория (если не задано явно) и
+    заводит каталоги кейсов и фикстур. Идемпотентно: повторный запуск не
+    перезатирает уже написанный `bot.yaml`.
+    """
+    from botkit_farm.pack import scaffold_pack
+
+    try:
+        pack = scaffold_pack(target, builder=builder)
+    except (OSError, ValueError) as exc:
+        print(f"не удалось создать пак: {exc}")
+        return 2
+
+    m = pack.manifest
+    print(f"пак: {pack.root}")
+    print(f"  бот:        {m.bot.name} · сборка: {m.bot.builder or '? (укажите вручную)'}")
+    if m.bot.reason:
+        print(f"              ({m.bot.reason})")
+    print(f"  кейсы:      {pack.manual_dir}")
+    print(f"  генерация:  {pack.generated_dir}")
+    print(f"  фикстуры:   {pack.fixtures_dir}")
+    print("\nПоложите YAML-кейсы в каталог кейсов и запустите: botkit-farm run --pack .")
+    return 0
+
+
 # ── list ────────────────────────────────────────────────────────────────────
 
 
@@ -241,29 +272,40 @@ async def _run_one(case_path: pathlib.Path, ref: str | None) -> CaseResult | Non
 async def _run(args: argparse.Namespace) -> int:
     security.assert_fake_token()  # до всего, что может коснуться сети
 
+    # Каталог кейсов: свой cases/ или кейсы пака (`--pack`), которые бот хранит
+    # рядом со своим кодом. Пак найден — источник кейсов меняется целиком.
+    cases_root = CASES_DIR
+    if args.pack:
+        from botkit_farm.pack import load_pack
+
+        try:
+            pack = load_pack(args.pack)
+        except (FileNotFoundError, ValueError) as exc:
+            print(f"пак не загрузился: {exc}")
+            return 2
+        cases_root = pack.cases_dir
+        print(f"пак: {pack.root} (кейсы: {cases_root})")
+
     if args.case:
         paths = [pathlib.Path(a) for a in args.case]
-        for p in paths:
+        for i, p in enumerate(paths):
             if not p.exists():
-                p = CASES_DIR / p
+                paths[i] = cases_root / p
     else:
-        paths = sorted(CASES_DIR.rglob("*.y*ml"))
+        paths = sorted(cases_root.rglob("*.y*ml"))
         if args.tag:
-            loaded, errs = load_dir(CASES_DIR)
+            loaded, errs = load_dir(cases_root)
             for e in errs:
                 print(f"  ⚠️  {e}")
+            all_cases = sorted(cases_root.rglob("*.y*ml"))
             paths = []
             for c in loaded:
                 if args.tag in c.tags:
                     paths.append(
-                        next(
-                            x
-                            for x in sorted(CASES_DIR.rglob("*.y*ml"))
-                            if x.stem == c.id or x.name.startswith(c.id)
-                        )
+                        next(x for x in all_cases if x.stem == c.id or x.name.startswith(c.id))
                     )
         if not paths:
-            print(f"кейсы не найдены в {CASES_DIR}")
+            print(f"кейсы не найдены в {cases_root}")
             return 2
 
     started = time.monotonic()
@@ -308,10 +350,20 @@ def main(argv: list[str] | None = None) -> int:
     p_list = sub.add_parser("list", help="показать кейсы")
     p_list.set_defaults(fn=None)
 
+    p_init = sub.add_parser("init", help="создать каркас пака в репозитории бота")
+    p_init.add_argument("target", nargs="?", default=".", help="путь к репозиторию бота")
+    p_init.add_argument(
+        "--builder",
+        choices=["legacy", "newgen", "reminder"],
+        help="поколение сборки (по умолчанию определяется по коду)",
+    )
+    p_init.set_defaults(fn=None)
+
     p_run = sub.add_parser("run", help="прогнать кейсы")
     p_run.add_argument("case", nargs="*", help="файлы кейсов (по умолчанию — все)")
     p_run.add_argument("--tag", help="только кейсы с этим тегом")
     p_run.add_argument("--ref", help="ветка/тег для клонирования")
+    p_run.add_argument("--pack", help="каталог пака или репозиторий бота с .botkit-farm")
     p_run.set_defaults(fn=_run)
 
     args = ap.parse_args(argv)
@@ -322,6 +374,8 @@ def main(argv: list[str] | None = None) -> int:
             return _study(args.target, args.json)
         if args.cmd == "list":
             return _list_cases()
+        if args.cmd == "init":
+            return _init(args.target, args.builder)
         return asyncio.run(_run(args))
     except KeyboardInterrupt:
         print("\nпрервано")

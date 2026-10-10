@@ -49,6 +49,8 @@ class Expect(Strict):
     buttons_contains: list[str] = Field(default_factory=list)
     buttons_count: int | None = Field(default=None, ge=0)
     silent: bool = False
+    # Якорь в коде: используется sync для обнаружения дрейфа
+    anchor: str | None = Field(default=None, max_length=512)
     # Ограничение на длину ответа в символах: ловит «бот ответил пустым» и
     # «бот ушёл в бесконечный цикл печати» раньше, чем это увидит человек.
     max_len: int | None = Field(default=None, ge=1)
@@ -98,6 +100,8 @@ class Step(Strict):
     # Пометка «этот шаг можно упасть без порчи кейса» — для навигационных
     # шагов, где у бота нет одного правильного ответа.
     optional: bool = False
+    # Якорь шага в коде (команда/кнопка/обработчик)
+    anchor: str | None = Field(default=None, max_length=512)
     note: str | None = Field(default=None, max_length=512)
 
     @model_validator(mode="after")
@@ -123,6 +127,10 @@ class Step(Strict):
 
 class Case(Strict):
     """Тест-кейс целиком."""
+
+    schema_version: int | None = 1
+    origin: Literal["generated", "manual"] | None = None
+    status: Literal["active", "removed"] | None = None
 
     # id — часть имени файла отчёта и имя кадра, поэтому только безопасные
     # символы: иначе «../../etc/passwd» уедет из каталога отчётов.
