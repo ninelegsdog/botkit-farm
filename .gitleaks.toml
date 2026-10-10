@@ -1,0 +1,33 @@
+# Правила проекта. Базовая защита gitleaks не знает про telegram api_hash —
+# а именно его утечка однажды стоила инцидента, поэтому правило здесь своё.
+title = "botkit-farm: правила утечек"
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "telegram-api-hash"
+description = "Telegram api_hash/id в коде или конфиге"
+regex = '''(?i)\b(api_hash|api_id)\s*[:=]\s*["']?\d{5,}'''
+keywords = ["api_hash", "api_id"]
+
+[[rules]]
+id = "telegram-bot-token"
+description = "Токен бота Telegram"
+regex = '''\b\d{8,10}:[A-Za-z0-9_-]{35}\b'''
+keywords = [":"]
+
+[[rules]]
+id = "fake-token-in-runtime-code"
+description = "Фейковый токен стенда, попавший в продакшен-код"
+# 424242:... допустим ТОЛЬКО как заглушка в коде фермы и её тестах.
+regex = '''424242:FAKE-TOKEN-FOR-LOCAL-STAND'''
+path = '''^(?!src/botkit_farm/|tests/).*$'''
+keywords = ["424242"]
+
+[allowlist]
+paths = ['''(^|/)\.venv/''',
+          '''(^|/)bots/''',
+          '''(^|/)envs/''',
+          '''(^|/)reports/frames/''',
+          '''assets/.*\.png$''']
