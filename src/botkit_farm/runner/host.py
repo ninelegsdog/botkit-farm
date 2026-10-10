@@ -154,10 +154,16 @@ async def main():
             last_buttons = [b.get("callback_data", "") for c in spoken
                             for row in (c.payload.get("reply_markup") or {{}}).get("inline_keyboard") or []
                             for b in row if b.get("callback_data")]
+            media = []
+            for c in fresh:
+                m = fake_api.media_of(c)
+                if m is not None:
+                    media.append({{"kind": m[0], "file_id": m[1], "caption": m[2]}})
             turns.append({{"kind": "step", "text": step["label"],
                            "replies": [c.payload.get("text", "") for c in spoken] + toasts,
                            "messages": [c.payload.get("text", "") for c in spoken],
                            "toasts": toasts,
+                           "media": media,
                            "buttons": [b.get("text", "")
                                        for c in spoken
                                        for row in (c.payload.get("reply_markup") or {{}}).get("inline_keyboard") or []

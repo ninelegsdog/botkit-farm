@@ -19,7 +19,7 @@ from botkit_farm import fixtures as fx
 from botkit_farm import security
 from botkit_farm.case.model import Case, Expect
 from botkit_farm.inspector.repo import detect_builder
-from botkit_farm.runner.contract import CrashTurn, HostTurn, NoButtonTurn
+from botkit_farm.runner.contract import CrashTurn, HostTurn, Media, NoButtonTurn
 from botkit_farm.runner.host import ExecResult, run_bot
 from botkit_farm.runner.result import CaseResult, Failure, Status, Turn
 
@@ -54,21 +54,29 @@ def _adapter_for(case: Case, bot_dir: pathlib.Path) -> str:
 
 
 def _check(
-    exp: Expect, step_index: int, label: str, replies: list[str], buttons: list[str]
+    exp: Expect,
+    step_index: int,
+    label: str,
+    replies: list[str],
+    buttons: list[str],
+    media: list[Media] | None = None,
 ) -> list[Failure]:
     """Сверить ожидание с фактом. Пустой список — всё сошлось."""
     fails: list[Failure] = []
     joined = "\n".join(replies)
+    media = media or []
 
     if exp.silent:
-        if replies:
+        if replies or media:
+            # Медиа — тоже ответ: бот, приславший фото, не «промолчал».
+            got = replies[0][:120] if replies else "; ".join(m.kind for m in media)
             fails.append(
                 Failure(
                     step_index,
                     label,
                     "not_silent",
                     "бот промолчал",
-                    f"бот ответил: {replies[0][:120]!r}",
+                    f"бот ответил: {got!r}",
                     "уберите silent, если ответ ожидается",
                 )
             )
@@ -131,6 +139,45 @@ def _check(
                 "возможен цикл печати в боте",
             )
         )
+    # Медиа проверяется отдельно от текста: бот может прислать фото без подписи,
+    # и text_contains по такому ответу всегда провалится — а это ожидаемо.
+    if exp.media_kind is not None:
+        kinds = [m.kind for m in media]
+        if exp.media_kind not in kinds:
+            fails.append(
+                Failure(
+                    step_index,
+                    label,
+                    "media_kind",
+                    exp.media_kind,
+                    "; ".join(kinds) or "(медиа нет)",
+                    "сверьте метод отправки в коде бота (sendPhoto → photo)",
+                )
+            )
+    if exp.media_count is not None and len(media) != exp.media_count:
+        fails.append(
+            Failure(
+                step_index,
+                label,
+                "media_count",
+                f"ровно {exp.media_count}",
+                f"{len(media)}: " + "; ".join(m.kind for m in media),
+                "число вложений в ответе",
+            )
+        )
+    for needle in exp.caption_contains:
+        captions = "\n".join(m.caption for m in media)
+        if needle not in captions:
+            fails.append(
+                Failure(
+                    step_index,
+                    label,
+                    "caption_missing",
+                    needle,
+                    "; ".join(m.caption for m in media if m.caption) or "(подписей нет)",
+                    "подпись к файлу — та, что видит клиент",
+                )
+            )
     return fails
 
 
@@ -278,13 +325,20 @@ def _consume(turns: list[HostTurn], case: Case, result: CaseResult) -> Status:
             messages = list(turn.messages)
         else:
             messages = [r for r in replies if r not in toasts]
+        media = list(turn.media)
         if messages:
-            result.turns.append(Turn(text=messages[-1], out=False, buttons=buttons))
+            result.turns.append(Turn(text=messages[-1], out=False, buttons=buttons, media=media))
+        elif media:
+            # Бот ответил только медиа, без текста: пузырь всё равно нужен, иначе
+            # кадр покажет «бот молчал», а кейс с media_* не увидит ни одного
+            # вложения. Текст не подставляем — подписи нарисует само медиа,
+            # иначе одна и та же подпись попала бы в кадр дважды.
+            result.turns.append(Turn(text="", out=False, buttons=buttons, media=media))
 
         step = case.steps[min(idx, len(case.steps) - 1)]
         result.steps_done = idx + 1
         if step.expect and idx < len(case.steps):
-            fails = _check(step.expect, idx, step.label(), replies, buttons)
+            fails = _check(step.expect, idx, step.label(), replies, buttons, media)
             if fails:
                 result.failures.extend(fails)
                 if not step.optional:

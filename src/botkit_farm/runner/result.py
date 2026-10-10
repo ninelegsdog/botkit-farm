@@ -12,6 +12,8 @@ import enum
 from dataclasses import dataclass, field
 from typing import Any
 
+from botkit_farm.runner.contract import Media
+
 
 class Status(enum.StrEnum):
     """Итог кейса. Наследует str, чтобы печатался как «passed» в отчёте."""
@@ -50,6 +52,9 @@ class Turn:
     text: str
     out: bool  # True — клиент, False — бот
     buttons: list[str] = field(default_factory=list)
+    # Вложенные файлы ответа (фото, документ, голос…). Хранятся на реплике, а не
+    # отдельным списком: кадр рисует медиа как часть того же сообщения бота.
+    media: list[Media] = field(default_factory=list)
     # Всплывающее уведомление (answerCallbackQuery): клиент видит его как
     # отдельный элемент, и в кадре оно рисуется иначе, чем обычное сообщение.
     is_toast: bool = False
@@ -92,7 +97,12 @@ class CaseResult:
         for i, t in enumerate(self.turns):
             who = "клиент" if t.out else ("всплыв." if t.is_toast else "бот   ")
             extra = f"  [{'; '.join(t.buttons)}]" if t.buttons else ""
-            lines.append(f"{i:>2} {who}: {t.text}{extra}")
+            media = ""
+            if t.media:
+                media = "  " + "; ".join(
+                    f"‹{m.kind}: {m.caption}›" if m.caption else f"‹{m.kind}›" for m in t.media
+                )
+            lines.append(f"{i:>2} {who}: {t.text}{media}{extra}")
         return "\n".join(lines)
 
     def to_dict(self) -> dict[str, Any]:

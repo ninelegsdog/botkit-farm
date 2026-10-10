@@ -37,6 +37,12 @@ class Strict(BaseModel):
 # любой реплики бота.
 MAX_TEXT = 4096
 
+# Виды медиа, которые ферма умеет ловить и рисовать. Список закрыт намеренно:
+# неизвестный вид — это сигнал, что кейс и фейковый API разъехались, а не
+# «нарисуем пустоту» (роадмап B2). Живёт рядом с Expect, потому что и модель
+# кейса, и контракт границы (runner/contract.py) сверяются с одним списком.
+MediaKind = Literal["photo", "document", "voice", "sticker", "video", "animation"]
+
 
 class Expect(Strict):
     """Что должно быть правдой после шага.
@@ -51,6 +57,11 @@ class Expect(Strict):
     buttons_contains: list[str] = Field(default_factory=list)
     buttons_count: int | None = Field(default=None, ge=0)
     silent: bool = False
+    # Медиа в ответе — не текст, и проверять его текстом нельзя: бот может
+    # прислать фото с подписью «Прайс» или без неё. Проверки отдельные.
+    media_kind: MediaKind | None = None
+    media_count: int | None = Field(default=None, ge=0)
+    caption_contains: list[str] = Field(default_factory=list)
     # Якорь в коде: используется sync для обнаружения дрейфа
     anchor: str | None = Field(default=None, max_length=512)
     # Ограничение на длину ответа в символах: ловит «бот ответил пустым» и
@@ -66,6 +77,9 @@ class Expect(Strict):
             or self.buttons_count is not None
             or self.silent
             or self.max_len
+            or self.media_kind is not None
+            or self.media_count is not None
+            or self.caption_contains
         ):
             raise ValueError(
                 "ожидание пустое: перечислено ни одно условие. Либо опишите, что "

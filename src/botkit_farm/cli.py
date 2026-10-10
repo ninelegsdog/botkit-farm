@@ -269,7 +269,15 @@ async def _shoot(case: Any, result: CaseResult) -> None:
     from botkit_farm import render
 
     turns = [
-        {"text": t.text, "out": t.out, "buttons": t.buttons, "is_toast": t.is_toast}
+        {
+            "text": t.text,
+            "out": t.out,
+            "buttons": t.buttons,
+            "is_toast": t.is_toast,
+            "media": [
+                {"kind": m.kind, "file_id": m.file_id, "caption": m.caption} for m in t.media
+            ],
+        }
         for t in result.turns
     ]
     frames = REPORTS_DIR / "frames"

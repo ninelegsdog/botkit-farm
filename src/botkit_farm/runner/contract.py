@@ -20,10 +20,10 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
 
-# Виды медиа, поддержанные фейковым API. Список закрыт намеренно: неизвестный
-# вид — это не «нарисуем пустоту», а сигнал, что контракт и фейковый API
-# разъехались (см. роадмап B2).
-MediaKind = Literal["photo", "document", "voice", "sticker", "video", "animation"]
+from botkit_farm.case.model import MediaKind
+
+# Виды медиа объявлены рядом с моделью кейса (case/model.py): и `Expect`, и
+# контракт границы сверяются с одним и тем же закрытым списком.
 
 
 class Media(BaseModel):

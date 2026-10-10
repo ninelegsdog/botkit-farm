@@ -123,6 +123,9 @@ main {{ flex:1; padding:20px 24px 12px; display:flex; flex-direction:column; gap
 .row.out {{ flex-direction:column; align-items:flex-end; }}
 .row.out .bubble {{ border-bottom-right-radius:4px; }}
 .row:not(.out) .bubble {{ border-bottom-left-radius:4px; }}
+.media {{ margin:2px 0; }}
+.media img {{ display:block; width:100%; max-width:340px; border-radius:10px; }}
+.cap {{ margin-top:5px; }}
 .chips {{ display:flex; flex-wrap:wrap; gap:8px; margin:6px 0 2px; }}
 .chip {{
   padding:7px 13px; border-radius:11px; background:{BTN_BG};
@@ -179,6 +182,9 @@ main {{ flex:1; padding:14px 14px 10px; display:flex; flex-direction:column; gap
 .row.out {{ flex-direction:column; align-items:flex-end; }}
 .row.out .bubble {{ border-bottom-right-radius:4px; }}
 .row:not(.out) .bubble {{ border-bottom-left-radius:4px; }}
+.media {{ margin:2px 0; }}
+.media img {{ display:block; width:100%; max-width:78%; border-radius:12px; }}
+.cap {{ margin-top:4px; }}
 .time {{ font-size:11px; color:{MUTED}; margin-top:3px; }}
 .row.out .time {{ align-self:flex-end; }}
 .chips {{ display:flex; flex-wrap:wrap; gap:6px; margin:4px 0 2px; }}
@@ -230,6 +236,9 @@ body.win {{ font-family:{FONT_STACK}; -webkit-font-smoothing:antialiased; }}
 }}
 .row.out .bubble {{ background:{OUT_BUBBLE}; }}
 .row:not(.out) .bubble {{ border-bottom-left-radius:4px; }}
+.media {{ margin:2px 0; }}
+.media img {{ display:block; width:100%; max-width:320px; border-radius:9px; }}
+.cap {{ margin-top:4px; }}
 .row.out .bubble {{ border-bottom-right-radius:4px; }}
 /* Время в Telegram Desktop стоит справа в последней строке пузыря, а не под ним,
    как на телефоне. Сдвиг вниз на полстроки убирает провал базовой линии. */
@@ -290,6 +299,48 @@ def _clock(idx: int) -> str:
     return f"{m // 60 % 24:02d}:{m % 60:02d}"
 
 
+# Медиа на кадре — заглушка с видом файла, а не сам файл: ферма не хранит чужие
+# вложения, и подсовывать вымышленную картинку значило бы врать в кадре. Вид и
+# подпись честно показывают, что бот прислал, а <img> остаётся настоящим тегом —
+# вёрстка такая же, как для реального фото.
+_MEDIA_LABEL = {
+    "photo": "фото",
+    "document": "документ",
+    "voice": "голосовое",
+    "sticker": "стикер",
+    "video": "видео",
+    "animation": "анимация",
+}
+
+
+def _media_placeholder(kind: str) -> str:
+    """data:image/svg-заглушка вида медиа. base64 — чтобы `#` в цвете не порвал URI."""
+    import base64
+
+    label = _MEDIA_LABEL.get(kind, kind)
+    svg = (
+        "<svg xmlns='http://www.w3.org/2000/svg' width='320' height='180'>"
+        "<rect width='320' height='180' rx='14' fill='#202b36'/>"
+        "<text x='160' y='100' font-family='sans-serif' font-size='22' "
+        f"fill='#6ab3f3' text-anchor='middle'>{label}</text></svg>"
+    )
+    return "data:image/svg+xml;base64," + base64.b64encode(svg.encode("utf-8")).decode("ascii")
+
+
+def _media_html(items: list[dict[str, Any]]) -> str:
+    blocks = []
+    for m in items:
+        kind = str(m.get("kind", "file"))
+        src = _media_placeholder(kind)
+        cap = (
+            f'<div class="cap">{_tg_html(str(m.get("caption", "")))}</div>'
+            if m.get("caption")
+            else ""
+        )
+        blocks.append(f'<div class="media"><img src="{src}" alt="{_esc(kind)}">{cap}</div>')
+    return "".join(blocks)
+
+
 def _bg_assets() -> list[pathlib.Path]:
     d = _asset_dir()
     if not d.exists():
@@ -329,11 +380,12 @@ def _bubble_row(
         # без собственного оформления кадр врал бы о том, что клиент видит.
         return f'<div class="toast">{_tg_html(turn["text"])}</div>'
     body = _tg_html(turn["text"])
+    media = _media_html(turn.get("media") or [])
     if window:
         # В окне Telegram время — часть последней строки пузыря, поэтому оно
         # внутри, а не отдельной строкой под ним, как на телефоне.
         body += f'<span class="t">{_clock(idx)}</span>'
-    parts = [f'<div class="{cls}"><div class="bubble">{body}</div>']
+    parts = [f'<div class="{cls}"><div class="bubble">{media}{body}</div>']
     if phone:
         parts.append(f'<span class="time">{_clock(idx)}</span>')
     labels = turn.get("buttons") or []
