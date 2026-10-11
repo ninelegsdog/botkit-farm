@@ -439,6 +439,82 @@ def check_cases(root: Path) -> Check:
     )
 
 
+# ── 7. Порты webhook ────────────────────────────────────────────────────────
+
+
+def port_free(port: int, host: str = "127.0.0.1") -> bool:
+    """Свободен ли loopback-порт: можно ли на него забиндиться прямо сейчас."""
+    import socket
+
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        try:
+            sock.bind((host, port))
+        except OSError:
+            return False
+    return True
+
+
+def check_webhook_ports(
+    root: Path,
+    is_free: Callable[[int], bool] | None = None,
+) -> Check:
+    """Порт webhook-сервера свободен у каждого кейса в режиме `mode: webhook`.
+
+    ТЗ C4: `doctor` проверяет, что порт свободен. Занятый порт — блокер: сервер
+    бота не поднимется, и кейс упадёт не из-за своего кода, а из-за чужого
+    процесса на машине. Проверяются `cases/` и `examples/` — оба каталога ферма
+    умеет прогонять.
+    """
+    from botkit_farm.case import load_dir
+    from botkit_farm.case.model import Case
+    from botkit_farm.runner.engine import _webhook_port
+
+    mode_cases: list[Case] = []
+    for name in ("cases", "examples"):
+        directory = root / name
+        if not directory.is_dir():
+            continue
+        cases, _ = load_dir(directory)
+        mode_cases.extend(c for c in cases if c.mode == "webhook")
+
+    if not mode_cases:
+        return Check(
+            name="webhook-port",
+            ok=True,
+            level=Level.BLOCKER,
+            what="кейсов в режиме webhook нет",
+            why="поднимать нечего — проверять порты незачем.",
+            fix="",
+        )
+
+    probe = is_free if is_free is not None else port_free
+    busy = [(c.id, _webhook_port(c.id)) for c in mode_cases if not probe(_webhook_port(c.id))]
+    if busy:
+        shown = ", ".join(f"{cid}:{port}" for cid, port in busy[:3])
+        return Check(
+            name="webhook-port",
+            ok=False,
+            level=Level.BLOCKER,
+            what=f"порт webhook занят: {shown}",
+            why=(
+                "кейс в режиме webhook не поднимет HTTP-сервер бота на занятом "
+                "порту и упадёт не из-за своего кода."
+            ),
+            fix="освободите порт (lsof -i :<порт>) или смените id кейса",
+        )
+
+    ports = sorted({_webhook_port(c.id) for c in mode_cases})
+    shown = ", ".join(str(p) for p in ports)
+    return Check(
+        name="webhook-port",
+        ok=True,
+        level=Level.BLOCKER,
+        what=f"порты webhook свободны: {shown}",
+        why="каждый webhook-кейс сможет поднять сервер бота на своём порту.",
+        fix="",
+    )
+
+
 # ── Сборка ──────────────────────────────────────────────────────────────────
 
 
@@ -458,6 +534,7 @@ async def run_checks(
     checks.extend(check_dirs(root))
     checks.append(check_frame_support(root))
     checks.append(check_isolation())
+    checks.append(check_webhook_ports(root))
     return Report(checks=tuple(checks))
 
 

@@ -37,14 +37,16 @@ import asyncio, json, os, sys
 # после chdir в пути бота они могут перекрыться его собственным пакетом src.
 sys.path.insert(0, {farm_src!r})
 
-from botkit_farm import fake_api, quarantine, scene, security, stand
+from botkit_farm import fake_api, quarantine, scene, security
 from botkit_farm.adapters import contract as adapter_contract
 
 ADAPTER_MODULE = {adapter_module!r}
 ADAPTER_ATTR = {adapter_attr!r}
 BOT_DIR = {bot_dir!r}
 RAW = {raw!r}
+MODE = {mode!r}
 PORT = {port!r}
+WEBHOOK_PORT = {webhook_port!r}
 RESULT = {result!r}
 DB_PATH = {db_path!r}
 VIOLATIONS = {violations!r}
@@ -90,10 +92,101 @@ def _seed_mod():
     return mod.seed
 
 
+async def _start_webhook(dp, bot):
+    # Универсально поднимаем webhook-сервер бота, не заглядывая в его код.
+    # Контракт модуля бота — один из двух:
+    #   * build_webhook_app(dp, bot, secret) -> aiohttp.Application (legacy/newgen);
+    #   * app (ASGI) + set_webhook_dispatcher(dp) (например, FastAPI-бот).
+    # Возвращаем URL для POST и функцию остановки сервера. Нет ни одного контракта —
+    # говорим прямо, а не падаем трейсбеком из недр фреймворка.
+    import importlib
+
+    from aiohttp import web
+
+    secret = "farm-webhook-secret"
+    module = None
+    for name in ("src.core.webhook", "src.core.tgwebhook"):
+        try:
+            module = importlib.import_module(name)
+            break
+        except ImportError:
+            module = None
+    if module is None:
+        raise RuntimeError(
+            "бот не поддерживает webhook: нет модуля src.core.webhook "
+            "или src.core.tgwebhook с точкой сборки"
+        )
+
+    factory = getattr(module, "build_webhook_app", None)
+    if factory is not None:
+        app = factory(dp, bot, secret)
+        runner = web.AppRunner(app)
+        await runner.setup()
+        await web.TCPSite(runner, "127.0.0.1", WEBHOOK_PORT).start()
+
+        async def stop_aiohttp():
+            await runner.cleanup()
+
+        return "http://127.0.0.1:%d/webhook" % WEBHOOK_PORT, stop_aiohttp
+
+    setter = getattr(module, "set_webhook_dispatcher", None)
+    asgi = getattr(module, "app", None)
+    if setter is not None and asgi is not None:
+        setter(dp)
+        import uvicorn
+
+        server = uvicorn.Server(
+            uvicorn.Config(asgi, host="127.0.0.1", port=WEBHOOK_PORT, log_level="warning")
+        )
+        task = asyncio.create_task(server.serve())
+        for _ in range(400):
+            if server.started:
+                break
+            await asyncio.sleep(0.05)
+        else:
+            server.should_exit = True
+            raise RuntimeError("webhook-сервер бота не поднялся за 20 с")
+        token_id = os.environ.get("TELEGRAM_BOT_TOKEN", "424242").split(":")[0]
+
+        async def stop_asgi():
+            server.should_exit = True
+            await task
+
+        return "http://127.0.0.1:%d/webhook/%s" % (WEBHOOK_PORT, token_id), stop_asgi
+
+    raise RuntimeError(
+        "webhook-модуль бота не предоставляет ни build_webhook_app, "
+        "ни set_webhook_dispatcher+app"
+    )
+
+
+async def _wait_webhook(rec, before, quiet=0.2, cap=2.0):
+    # Webhook-сервер бота отвечает клиенту сразу, а обработку ведёт в фоне
+    # (aiogram SimpleRequestHandler по умолчанию handle_in_background=True).
+    # Поэтому ждём, пока поток вызовов API устоится: иначе прочитаем ответы
+    # раньше, чем бот их сделает, и решим, что он промолчал.
+    import time
+
+    started = time.monotonic()
+    last = len(rec.calls)
+    calm = started
+    while time.monotonic() - started < cap:
+        await asyncio.sleep(0.05)
+        count = len(rec.calls)
+        if count != last:
+            last = count
+            calm = time.monotonic()
+        if count > before and time.monotonic() - calm >= quiet:
+            break
+
+
 async def main():
     rec = fake_api.Recorder()
     runner = await fake_api.serve(rec, port=PORT)
     bot = None
+    use_webhook = MODE == "webhook"
+    webhook_url = ""
+    webhook_stop = None
     try:
         # Фабрику ищем по ссылке из кейса — встроенный адаптер это тоже
         # `botkit_farm.adapters.<имя>`. Проверка результата живёт в контракте:
@@ -109,6 +202,8 @@ async def main():
         # Адаптер обязан не менять токен. Проверяем это после сборки, а не
         # только до: сторонний адаптер — код, который мы не писали.
         security.assert_fake_token()
+        if use_webhook:
+            webhook_url, webhook_stop = await _start_webhook(dp, bot)
         turns = []
         known = {{}}
         last_buttons = []
@@ -130,7 +225,7 @@ async def main():
                 chat = None
                 if chat_cfg:
                     from botkit_farm.scene import ChatConfig
-                    chat = ChatConfig(id=FAKE_CHAT_ID, type=chat_cfg.get("type", "private"), title=chat_cfg.get("title"), thread_id=chat_cfg.get("thread_id"), bot_username=chat_cfg.get("bot_username"))
+                    chat = ChatConfig(id=scene.FAKE_CHAT_ID, type=chat_cfg.get("type", "private"), title=chat_cfg.get("title"), thread_id=chat_cfg.get("thread_id"), bot_username=chat_cfg.get("bot_username"))
                 update = scene.to_message(step["value"], uid, actor=actor, chat=chat)
             elif step["kind"] == "pick":
                 # Определить актёра и чат для шага (ТЗ C3)
@@ -144,7 +239,7 @@ async def main():
                 chat = None
                 if chat_cfg:
                     from botkit_farm.scene import ChatConfig
-                    chat = ChatConfig(id=FAKE_CHAT_ID, type=chat_cfg.get("type", "private"), title=chat_cfg.get("title"), thread_id=chat_cfg.get("thread_id"), bot_username=chat_cfg.get("bot_username"))
+                    chat = ChatConfig(id=scene.FAKE_CHAT_ID, type=chat_cfg.get("type", "private"), title=chat_cfg.get("title"), thread_id=chat_cfg.get("thread_id"), bot_username=chat_cfg.get("bot_username"))
                 # Кнопка по позиции: бот сам сообщает, что он предлагает (даты,
                 # слоты, идентификаторы), и зашивать это в кейс нельзя.
                 last_btns = last_buttons or []
@@ -175,7 +270,7 @@ async def main():
                 chat = None
                 if chat_cfg:
                     from botkit_farm.scene import ChatConfig
-                    chat = ChatConfig(id=FAKE_CHAT_ID, type=chat_cfg.get("type", "private"), title=chat_cfg.get("title"), thread_id=chat_cfg.get("thread_id"), bot_username=chat_cfg.get("bot_username"))
+                    chat = ChatConfig(id=scene.FAKE_CHAT_ID, type=chat_cfg.get("type", "private"), title=chat_cfg.get("title"), thread_id=chat_cfg.get("thread_id"), bot_username=chat_cfg.get("bot_username"))
                 cb = None
                 for k, v in known.items():
                     if v == data:
@@ -190,7 +285,25 @@ async def main():
             uid += 1
             before = len(rec.calls)
             try:
-                if RAW:
+                if use_webhook:
+                    # Webhook-режим: POST с сырым JSON на настоящий HTTP-сервер
+                    # бота — запрос проходит его middleware-стек, как в бою.
+                    # Клиент — aiohttp: он есть и у фермы, и у любого aiogram-бота.
+                    import aiohttp
+
+                    headers = {{"Content-Type": "application/json", "X-Telegram-Bot-Api-Secret-Token": "farm-webhook-secret"}}
+                    async with aiohttp.ClientSession() as session:
+                        async with session.post(
+                            webhook_url,
+                            json=scene.to_raw_update(update),
+                            headers=headers,
+                            timeout=aiohttp.ClientTimeout(total=10),
+                        ) as resp:
+                            if resp.status >= 400:
+                                body = (await resp.text())[:200]
+                                raise RuntimeError("webhook вернул %d: %s" % (resp.status, body))
+                    await _wait_webhook(rec, before)
+                elif RAW:
                     # Сырой режим: бот сам разбирает JSON (feed_raw_update →
                     # Update.model_validate), как при webhook. Тот же Update, но
                     # пройденный через сериализацию, — проверяется десериализация.
@@ -233,6 +346,11 @@ async def main():
                                        for b in row]}})
         json.dump(turns, open(RESULT, "w", encoding="utf-8"), ensure_ascii=False)
     finally:
+        if webhook_stop is not None:
+            try:
+                await webhook_stop()
+            except Exception:
+                pass
         if bot is not None:
             try:
                 await bot.session.close()
@@ -281,10 +399,12 @@ def run_bot(
     adapter_module: str,
     adapter_attr: str,
     raw: bool,
+    mode: str,
     port: int,
     fixture: pathlib.Path | None,
     steps: list[dict[str, object]],
     db_path: pathlib.Path,
+    webhook_port: int | None = None,
     actors: dict[str, object] | None = None,
     chat: dict[str, object] | None = None,
     redis_url: str = "redis://127.0.0.1:6380/0",
@@ -302,6 +422,9 @@ def run_bot(
     """
     with tempfile.TemporaryDirectory(prefix="farm-exec-") as tmp:
         tmpdir = pathlib.Path(tmp)
+        # Порт webhook-сервера бота обязан отличаться от порта подделки API:
+        # оба слушают loopback в одном процессе, и совпадение — коллизия.
+        resolved_webhook_port = webhook_port if webhook_port is not None else port + 1
         steps_file = tmpdir / "steps.json"
         result_file = tmpdir / "result.json"
         # Каталог прогона — корень карантина: хост пишет сюда свои файлы, и
@@ -314,16 +437,21 @@ def run_bot(
             adapter_module=adapter_module,
             adapter_attr=adapter_attr,
             raw=raw,
+            mode=mode,
             bot_dir=str(bot_dir),
             port=port,
+            webhook_port=resolved_webhook_port,
             db_path=str(db_path),
             redis_url=redis_url,
             fixture=str(fixture) if fixture else "",
             steps_file=str(steps_file),
             result=str(result_file),
             violations=str(violations_file),
-            actors=json.dumps(actors) if actors else "{}",
-            chat=json.dumps(chat) if chat else "null",
+            # Объекты, а не их JSON: шаблон вставляет значения через `!r`, и
+            # строка `"null"` превратилась бы в литерал 'null' — truthy, из-за
+            # чего `chat_cfg.get(...)` падал на каждом кейсе.
+            actors=actors or {},
+            chat=chat,
         )
         host_file = tmpdir / "host.py"
         host_file.write_text(host, encoding="utf-8")

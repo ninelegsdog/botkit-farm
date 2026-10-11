@@ -211,6 +211,37 @@ def test_сырой_режим_включается():
     assert case.raw is True
 
 
+def test_режим_по_умолчанию_polling():
+    """Обратная совместимость: без `mode` кейс ведёт себя как раньше."""
+    assert _кейс_с_builder("newgen").mode == "polling"
+
+
+def test_webhook_режим_принимается():
+    case = Case.model_validate(
+        {
+            "id": "x-wh",
+            "title": "Webhook",
+            "source": ".",
+            "steps": [{"send": "/start", "expect": {"silent": True}}],
+            "mode": "webhook",
+        }
+    )
+    assert case.mode == "webhook"
+
+
+def test_неизвестный_режим_отвергается():
+    with pytest.raises(ValueError):
+        Case.model_validate(
+            {
+                "id": "x-bad",
+                "title": "Плохой режим",
+                "source": ".",
+                "steps": [{"send": "/start", "expect": {"silent": True}}],
+                "mode": "carrier-pigeon",
+            }
+        )
+
+
 @pytest.mark.parametrize("bad_id", ["Плохой", "../escape", "with space", "UPPER"])
 def test_ид_с_небезопасными_символами_отвергается(bad_id):
     """id попадает в имя файла отчёта и путь кадра — с ../ он бы ушёл из каталога."""

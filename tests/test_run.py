@@ -70,6 +70,31 @@ def test_порт_не_зависит_от_длины_имени() -> None:
     assert engine._api_port("x") <= engine._api_port("x" * 10) < 8600
 
 
+# ── _webhook_port: порт webhook-сервера бота ────────────────────────────────
+
+
+def test_порт_webhook_считается_по_формуле() -> None:
+    """Точное число: сдвиг базы на единицу не должен проходить."""
+    for key in ("x", "booking", "membership"):
+        assert engine._webhook_port(key) == 8600 + sum(key.encode()) % 500
+
+
+def test_порт_webhook_лежит_в_своём_диапазоне() -> None:
+    for key in ("a", "booking", "длинный-идентификатор-кейса", "x" * 64):
+        assert 8600 <= engine._webhook_port(key) <= 9099
+
+
+def test_порт_webhook_не_совпадает_с_портом_подделки_api() -> None:
+    """Сервер бота и подделка API — разные порты: в одном процессе не ужиться."""
+    for key in ("a", "booking", "support", "x" * 64):
+        assert engine._webhook_port(key) != engine._api_port(key)
+        assert engine._webhook_port(key) > engine._api_port(key)
+
+
+def test_порт_webhook_детерминирован() -> None:
+    assert engine._webhook_port("booking") == engine._webhook_port("booking")
+
+
 # ── _farm_src: откуда подпроцесс импортирует ферму ──────────────────────────
 
 
@@ -469,6 +494,31 @@ def test_сырой_режим_из_кейса_доходит_до_хоста(tm
     )
 
     assert окружение.вызовы["raw"] is True
+
+
+def test_режим_webhook_из_кейса_доходит_до_хоста(tmp_path, monkeypatch) -> None:
+    """`mode: webhook` — и хост получает и режим, и порт webhook-сервера."""
+    case = _кейс(mode="webhook")
+    окружение = _Окружение(tmp_path, monkeypatch, ExecResult(turns=[]))
+
+    engine.run_case(
+        case, bot_dir=tmp_path / "bot", cache_dir=tmp_path / "envs", work_dir=tmp_path / ".work"
+    )
+
+    assert окружение.вызовы["mode"] == "webhook"
+    assert окружение.вызовы["webhook_port"] == engine._webhook_port("booking")
+
+
+def test_режим_polling_по_умолчанию_доходит_до_хоста(tmp_path, monkeypatch) -> None:
+    case = _кейс()
+    окружение = _Окружение(tmp_path, monkeypatch, ExecResult(turns=[]))
+
+    engine.run_case(
+        case, bot_dir=tmp_path / "bot", cache_dir=tmp_path / "envs", work_dir=tmp_path / ".work"
+    )
+
+    assert окружение.вызовы["mode"] == "polling"
+    assert окружение.вызовы["webhook_port"] == engine._webhook_port("booking")
 
 
 def test_база_обнуляется_перед_каждым_прогоном(tmp_path, monkeypatch) -> None:

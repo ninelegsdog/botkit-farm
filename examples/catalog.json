@@ -47,6 +47,11 @@
       "why": "дефект: obsidian/опыт/lessons #4 — всплывающее уведомление обязано попадать в отчёт, а не теряться (botkit-membership)"
     },
     {
+      "id": "membership-webhook",
+      "case": "membership-webhook.yaml",
+      "why": "покрытие: режим webhook — update идёт POST'ом через сервер бота и даёт тот же Turn, что polling (botkit-membership)"
+    },
+    {
       "id": "pricesentry-saved-item-history",
       "case": "pricesentry-saved-item-history.yaml",
       "why": "покрытие: pricesentry-flow — карточка товара, история цен, уведомление (botkit-pricesentry)"

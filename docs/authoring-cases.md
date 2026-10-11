@@ -23,6 +23,7 @@ title: Запись клиента — полный путь
 source: ./bots/botkit-bookingbot
 builder: legacy               # legacy | newgen | reminder или ссылка на плагин
 raw: false                    # true — бот сам разбирает сырой JSON (см. ниже)
+mode: polling                 # polling | webhook (см. ниже)
 fixture: bookingbot           # модуль с seed(db), если нужны данные
 frame: window
 
@@ -47,6 +48,21 @@ steps:
 polling/webhook, и самого частого класса багов: бот полагается на поле, которого
 в сыром JSON нет. Режим выключен по умолчанию; если кейс с `raw: true` падает там,
 где с `false` проходит, — это проблема разбора Update у бота, а не логики.
+
+### Режим доставки (`mode`)
+
+По умолчанию (`mode: polling`) ферма отдаёт Update диспетчеру напрямую
+(`feed_update`). С `mode: webhook` она поднимает **настоящий HTTP-сервер бота** и
+шлёт в него POST с сырым JSON — как это делает Telegram. Так проверяются боты,
+которые поднимаются только вебхуком (`bot.py` может содержать лишь запуск
+сервера), и весь middleware-стек на этом пути. Отчёт должен получить тот же
+`Turn`, что и в polling.
+
+Точка сборки сервера берётся из кода бота: `build_webhook_app(dispatcher, bot,
+secret)` (aiohttp — поколения legacy/newgen) либо `app` + `set_webhook_dispatcher`
+(ASGI, например FastAPI). Если такого модуля нет, кейс падает с понятной ошибкой,
+а не трейсбеком. Сервер бота слушает отдельный loopback-порт; `doctor` проверяет,
+что он свободен.
 
 ### Три вида шага
 

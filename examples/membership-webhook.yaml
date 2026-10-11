@@ -1,0 +1,61 @@
+# Кейс проверяет режим `mode: webhook` (ТЗ C4) на botkit-membership (legacy).
+# Обновление идёт не через feed_update, а HTTP POST'ом на настоящий сервер бота
+# (src/core/webhook.py → build_webhook_app), поэтому запрос проходит его
+# middleware-стек так же, как от Telegram. Шаги — те же, что в
+# membership-subscribe-happy-path: отчёт обязан получить тот же Turn.
+#
+#   botkit-farm study ./bots/botkit-membership
+#   /start                 → handlers.py:48 «Выберите действие:» + 4 кнопки
+#   mem:plans (⭐ Тарифы)   → handlers.py:68 edit «Выберите тариф:» + 3 тарифа
+#   mem:plan:1 (тариф)     → handlers.py:80 edit «Оформить подписку?»
+#   mem:subscribe:1 (✅)   → handlers.py:108 answer «Подписка оформлена!»
+
+schema_version: 1
+id: membership-webhook
+title: Оформление подписки — режим webhook
+description: >-
+  Тот же путь оформления подписки, что и в polling, но обновления доставляются
+  HTTP POST'ом на поднятый сервер бота. Доказывает, что webhook-режим проходит
+  настоящий middleware-стек и даёт тот же отчёт, что и polling.
+source: https://github.com/ninelegsdog/botkit-membership
+builder: legacy
+fixture: membership
+seed: true
+mode: webhook
+
+frame: window
+frame_title: MembershipBot · клуб
+frame_handle: "@MembershipKitBot"
+publishable: true
+
+tags: [smoke, regression]
+covers: membership-flow
+
+steps:
+  - send: "/start"
+    expect:
+      text_contains: ["Выберите действие:"]
+      buttons_contains: ["⭐ Тарифы", "📚 Контент", "📊 Опросы", "👤 Моя подписка"]
+      buttons_count: 4
+
+  - click: "⭐ Тарифы"
+    pause: 2.5
+    expect:
+      text_contains: ["Выберите тариф:"]
+      buttons_contains:
+        - "Месячный — 590₽ / 30 дн."
+        - "Квартальный — 1590₽ / 90 дн."
+        - "Годовой — 4990₽ / 365 дн."
+      buttons_count: 3
+
+  - click: "Месячный — 590₽ / 30 дн."
+    pause: 2.5
+    expect:
+      text_contains: ["Месячный", "590₽ / 30 дней", "Оформить подписку?"]
+      buttons_contains: ["✅ Оформить", "🔙 Назад"]
+      buttons_count: 2
+
+  - click: "✅ Оформить"
+    pause: 2.5
+    expect:
+      text_contains: ["Подписка оформлена!"]

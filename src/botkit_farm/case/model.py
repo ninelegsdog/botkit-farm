@@ -211,6 +211,9 @@ class Case(Strict):
     actors: dict[str, Actor] = Field(default_factory=dict)
     # Настройки чата: тип (private/group/supergroup), название, тред, ботюзернейм.
     chat: ChatSpec | None = None
+    # Режим прогона: polling (feed_update) или webhook (HTTP POST на /webhook).
+    # По умолчанию polling — совместимость с существующими кейсами.
+    mode: Literal["polling", "webhook"] = "polling"
 
     # Заголовок кадра: имя бота в шапке и подпись «демо-интерфейс» на фото.
     frame_title: str | None = Field(default=None, max_length=80)

@@ -86,6 +86,7 @@ def test_хост_получает_модуль_и_фабрику_адаптер
         adapter_module="mypkg.mine",
         adapter_attr="make",
         raw=False,
+        mode="polling",
         port=8100,
         fixture=None,
         steps=[],
@@ -119,6 +120,7 @@ def test_сырой_режим_включается_в_скрипте_хоста
         adapter_module="botkit_farm.adapters.newgen",
         adapter_attr="build",
         raw=True,
+        mode="polling",
         port=8101,
         fixture=None,
         steps=[],
@@ -127,3 +129,99 @@ def test_сырой_режим_включается_в_скрипте_хоста
 
     assert "RAW = True" in seen["script"]
     assert "feed_raw_update" in seen["script"]
+
+
+def test_webhook_режим_виден_в_скрипте_хоста(tmp_path: pathlib.Path, monkeypatch) -> None:
+    """`mode: webhook` доходит до скрипта и переключает его на HTTP-сервер бота."""
+    seen: dict[str, object] = {}
+    monkeypatch.delenv("BOTKIT_FARM_SANDBOX", raising=False)
+
+    def fake_run(cmd: list[str], **kw: object) -> SimpleNamespace:
+        script = pathlib.Path(cmd[-1])
+        seen["script"] = script.read_text(encoding="utf-8")
+        (script.parent / "result.json").write_text("[]", encoding="utf-8")
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(host.subprocess, "run", fake_run)
+
+    host.run_bot(
+        farm_src=tmp_path,
+        bot_python=tmp_path / "py",
+        bot_dir=tmp_path / "bot",
+        adapter_module="botkit_farm.adapters.newgen",
+        adapter_attr="build",
+        raw=False,
+        mode="webhook",
+        port=8100,
+        webhook_port=8700,
+        fixture=None,
+        steps=[],
+        db_path=tmp_path / "b.db",
+    )
+
+    script = seen["script"]
+    assert "MODE = 'webhook'" in script
+    assert "WEBHOOK_PORT = 8700" in script
+    assert "build_webhook_app" in script
+    assert "127.0.0.1:%d/webhook" in script
+
+
+def test_webhook_клиент_не_тянет_httpx(tmp_path: pathlib.Path, monkeypatch) -> None:
+    """Клиент — aiohttp (есть у любого aiogram-бота), а не httpx/uvicorn."""
+    seen: dict[str, object] = {}
+    monkeypatch.delenv("BOTKIT_FARM_SANDBOX", raising=False)
+
+    def fake_run(cmd: list[str], **kw: object) -> SimpleNamespace:
+        script = pathlib.Path(cmd[-1])
+        seen["script"] = script.read_text(encoding="utf-8")
+        (script.parent / "result.json").write_text("[]", encoding="utf-8")
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(host.subprocess, "run", fake_run)
+
+    host.run_bot(
+        farm_src=tmp_path,
+        bot_python=tmp_path / "py",
+        bot_dir=tmp_path / "bot",
+        adapter_module="botkit_farm.adapters.newgen",
+        adapter_attr="build",
+        raw=False,
+        mode="polling",
+        port=8100,
+        fixture=None,
+        steps=[],
+        db_path=tmp_path / "b.db",
+    )
+
+    assert "httpx" not in seen["script"]
+
+
+def test_порт_webhook_по_умолчанию_рядом_с_портом_api(tmp_path: pathlib.Path, monkeypatch) -> None:
+    """Если порт webhook не задан, он не совпадает с портом подделки API."""
+    seen: dict[str, object] = {}
+    monkeypatch.delenv("BOTKIT_FARM_SANDBOX", raising=False)
+
+    def fake_run(cmd: list[str], **kw: object) -> SimpleNamespace:
+        script = pathlib.Path(cmd[-1])
+        seen["script"] = script.read_text(encoding="utf-8")
+        (script.parent / "result.json").write_text("[]", encoding="utf-8")
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(host.subprocess, "run", fake_run)
+
+    host.run_bot(
+        farm_src=tmp_path,
+        bot_python=tmp_path / "py",
+        bot_dir=tmp_path / "bot",
+        adapter_module="botkit_farm.adapters.newgen",
+        adapter_attr="build",
+        raw=False,
+        mode="polling",
+        port=8100,
+        fixture=None,
+        steps=[],
+        db_path=tmp_path / "b.db",
+    )
+
+    assert "PORT = 8100" in seen["script"]
+    assert "WEBHOOK_PORT = 8101" in seen["script"]

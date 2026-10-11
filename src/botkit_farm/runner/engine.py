@@ -249,7 +249,9 @@ def run_case(
             adapter_module=ref.module,
             adapter_attr=ref.attr,
             raw=case.raw,
+            mode=case.mode,
             port=port,
+            webhook_port=_webhook_port(case.id),
             fixture=fixture,
             steps=steps,
             db_path=db_path,
@@ -401,6 +403,15 @@ def _farm_src() -> pathlib.Path:
 def _api_port(key: str) -> int:
     """Свой порт на бота: два параллельных прогона не должны драться за порт."""
     return 8100 + (sum(key.encode()) % 500)
+
+
+def _webhook_port(key: str) -> int:
+    """Порт webhook-сервера бота — отдельный диапазон от подделки API.
+
+    Диапазоны _api_port (8100–8599) и _webhook_port (8600–9099) не пересекаются,
+    поэтому у одного прогона порт бота и порт подделки API всегда различны.
+    """
+    return 8600 + (sum(key.encode()) % 500)
 
 
 def _git_commit(root: pathlib.Path) -> str:

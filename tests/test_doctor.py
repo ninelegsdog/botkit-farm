@@ -205,6 +205,61 @@ def test_годные_кейсы_проходят_проверку(tmp_path: Pat
     assert "кейсов 2" in check.what
 
 
+# ── Порты webhook ───────────────────────────────────────────────────────────
+
+
+def test_занятый_порт_называется_блокером(tmp_path: Path) -> None:
+    """ТЗ C4: занятый порт webhook — блокер, и он назван в отчёте."""
+    _farm(tmp_path, _good_case(mode="webhook"))
+    check = doctor.check_webhook_ports(tmp_path, is_free=lambda port: False)
+
+    assert check.name == "webhook-port"
+    assert check.ok is False
+    assert check.level is Level.BLOCKER
+    assert "занят" in check.what
+    assert check.fix != ""
+
+
+def test_свободные_порты_проходят(tmp_path: Path) -> None:
+    _farm(tmp_path, _good_case(mode="webhook"))
+    check = doctor.check_webhook_ports(tmp_path, is_free=lambda port: True)
+
+    assert check.ok is True
+    assert check.level is Level.BLOCKER
+    assert "свободны" in check.what
+
+
+def test_без_webhook_кейсов_проверка_молчит(tmp_path: Path) -> None:
+    _farm(tmp_path, _good_case())
+    check = doctor.check_webhook_ports(tmp_path, is_free=lambda port: False)
+
+    assert check.ok is True
+    assert "webhook нет" in check.what
+
+
+def test_webhook_кейсы_из_examples_тоже_проверяются(tmp_path: Path) -> None:
+    """Примеры прогоняются так же, как кейсы: их порты тоже должны быть свободны."""
+    (tmp_path / "examples").mkdir()
+    (tmp_path / "examples" / "wh.yaml").write_text(
+        yaml.safe_dump(_good_case(mode="webhook"), allow_unicode=True), encoding="utf-8"
+    )
+    check = doctor.check_webhook_ports(tmp_path, is_free=lambda port: False)
+
+    assert check.ok is False
+
+
+def test_порт_свободен_в_реальности() -> None:
+    """Без инъекции: только что отпущенный порт свободен, занятый — нет."""
+    port = _closed_port()
+    assert doctor.port_free(port) is True
+
+    with socket.socket() as srv:
+        srv.bind(("127.0.0.1", 0))
+        srv.listen(1)
+        busy = int(srv.getsockname()[1])
+        assert doctor.port_free(busy) is False
+
+
 # ── Изоляция ────────────────────────────────────────────────────────────────
 
 
@@ -355,6 +410,7 @@ async def test_сборка_отчёта_считает_блокеры(tmp_path:
         "dir:reports",
         "frame",
         "isolation",
+        "webhook-port",
     ]
 
 
