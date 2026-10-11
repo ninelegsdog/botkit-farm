@@ -13,8 +13,8 @@ import pytest
 
 from botkit_farm.case.model import Case, Expect
 from botkit_farm.runner import engine
-from botkit_farm.runner.contract import parse_turns
-from botkit_farm.runner.result import CaseResult, Status
+from botkit_farm.runner.contract import Media, parse_turns
+from botkit_farm.runner.result import CaseResult, Failure, Status, Turn
 
 
 def _turns(*raw: dict[str, Any]) -> list[Any]:
@@ -310,3 +310,470 @@ def test_старый_хост_без_messages_не_ломает_как():
     turns = _turns({"kind": "step", "text": "ping", "replies": ["Ок"]})
     assert engine._consume(turns, case, res) is Status.PASSED
     assert any(t.text == "Ок" for t in res.turns)
+
+
+# ── точный отчёт: каждое поле каждого Failure ────────────────────────────────
+#
+# Отчёт о несовпадении — это интерфейс для человека, который будет чинить
+# кейс: по нему он понимает, что просил, что получил и что делать. Значит текст
+# и структура — контракт, а не косметика. Ниже проверка фиксирует Failure
+# целиком: подмена любого поля, строки или среза делает отчёт врущим, и это
+# обязано ловиться тестом.
+#
+# Мутационный прогон (роадмап B4) обходит эти ветки и требует именно такой
+# строгости: «в отчёте где-то есть слово» мутант-строку не убивает.
+
+
+def _media(kind: str, caption: str = "") -> Media:
+    return Media(kind=kind, caption=caption)
+
+
+def test_отчёт_о_болтливом_боте_при_silent_полный():
+    got = engine._check(Expect(silent=True), 0, "шаг", ["Ответ"], [])
+    assert got == [
+        Failure(
+            0,
+            "шаг",
+            "not_silent",
+            "бот промолчал",
+            "бот ответил: 'Ответ'",
+            "уберите silent, если ответ ожидается",
+        )
+    ]
+
+
+def test_silent_и_медиа_это_тоже_ответ():
+    got = engine._check(
+        Expect(silent=True), 0, "шаг", [], [], [_media("photo"), _media("document")]
+    )
+    assert got == [
+        Failure(
+            0,
+            "шаг",
+            "not_silent",
+            "бот промолчал",
+            "бот ответил: 'photo; document'",
+            "уберите silent, если ответ ожидается",
+        )
+    ]
+
+
+def test_silent_обрезка_первой_реплики_до_ста_двадцати():
+    long = "х" * 121
+    got = engine._check(Expect(silent=True), 0, "шаг", [long], [])
+    assert got[0].actual == f"бот ответил: '{'х' * 120}'"
+
+
+def test_silent_с_репликой_и_медиа_берёт_реплику():
+    """При непустых replies отчёт показывает текст, а не список видов медиа."""
+    got = engine._check(Expect(silent=True), 0, "шаг", ["Слово"], [], [_media("photo")])
+    assert got[0].actual == "бот ответил: 'Слово'"
+
+
+def test_отчёт_о_несовпадении_текста_полный():
+    got = engine._check(Expect(text_equals="Готово"), 0, "шаг", ["Готово!"], [])
+    assert got == [
+        Failure(
+            0,
+            "шаг",
+            "text_mismatch",
+            "Готово",
+            "Готово!",
+            "сверьте текст с кодом бота (botkit-farm study)",
+        )
+    ]
+
+
+def test_отчёт_о_пропавшем_тексте_полный():
+    got = engine._check(Expect(text_contains=["Запись"]), 0, "шаг", ["Другое"], [])
+    assert got == [
+        Failure(
+            0,
+            "шаг",
+            "text_missing",
+            "Запись",
+            "Другое",
+            "текст должен быть в коде бота; сверьте инспектором",
+        )
+    ]
+
+
+def test_отчёт_о_молчании_при_ожидании_текста():
+    got = engine._check(Expect(text_contains=["Запись"]), 0, "шаг", [], [])
+    assert got[0].actual == "(бот промолчал)"
+
+
+def test_отчёт_о_кнопке_полный():
+    got = engine._check(Expect(buttons_contains=["Купить"]), 0, "шаг", [""], ["Далее"])
+    assert got == [
+        Failure(
+            0,
+            "шаг",
+            "button_missing",
+            "Купить",
+            "Далее",
+            "подпись кнопки — та, что видит клиент",
+        )
+    ]
+
+
+def test_отчёт_о_кнопке_при_их_отсутствии():
+    got = engine._check(Expect(buttons_contains=["Купить"]), 0, "шаг", [""], [])
+    assert got[0].actual == "(нет кнопок)"
+
+
+def test_отчёт_о_счёте_кнопок_полный():
+    got = engine._check(Expect(buttons_count=3), 0, "шаг", [""], ["а", "б"])
+    assert got == [
+        Failure(
+            0,
+            "шаг",
+            "button_count",
+            "ровно 3",
+            "2: а; б",
+            "счёт из кода или из ответа предыдущего шага",
+        )
+    ]
+
+
+def test_отчёт_о_счёте_кнопок_обрезает_до_двадцати():
+    btns = [f"к{i}" for i in range(21)]
+    got = engine._check(Expect(buttons_count=99), 0, "шаг", [""], btns)
+    assert got[0].actual == f"21: {'; '.join(btns[:20])}"
+
+
+def test_отчёт_о_перечислении_кнопок_обрезает_до_двадцати():
+    btns = [f"к{i}" for i in range(21)]
+    got = engine._check(Expect(buttons_contains=["нет"]), 0, "шаг", [""], btns)
+    assert got[0].actual == "; ".join(btns[:20])
+
+
+def test_отчёт_о_длине_полный():
+    got = engine._check(Expect(max_len=4), 0, "шаг", ["12345"], [])
+    assert got == [
+        Failure(
+            0,
+            "шаг",
+            "too_long",
+            "не длиннее 4",
+            "5 символов",
+            "возможен цикл печати в боте",
+        )
+    ]
+
+
+def test_длина_ровно_в_предел_не_считается_превышением():
+    """Граница: ответ ровно max_len символов — ещё не цикл печати. Мутант
+    с `>=` вместо `>` должен падать здесь."""
+    assert not engine._check(Expect(max_len=5), 0, "шаг", ["12345"], [])
+
+
+def test_отчёт_о_медиа_виде_полный():
+    got = engine._check(Expect(media_kind="photo"), 0, "шаг", [], [])
+    assert got == [
+        Failure(
+            0,
+            "шаг",
+            "media_kind",
+            "photo",
+            "(медиа нет)",
+            "сверьте метод отправки в коде бота (sendPhoto → photo)",
+        )
+    ]
+
+
+def test_отчёт_о_медиа_виде_перечисляет_фактические():
+    got = engine._check(
+        Expect(media_kind="photo"), 0, "шаг", [], [], [_media("document"), _media("voice")]
+    )
+    assert got[0].actual == "document; voice"
+
+
+def test_отчёт_о_счёте_медиа_полный():
+    got = engine._check(
+        Expect(media_count=3), 0, "шаг", [], [], [_media("photo"), _media("document")]
+    )
+    assert got[0].actual == "2: photo; document"
+    assert got[0].expected == "ровно 3"
+
+
+def test_отчёт_о_счёте_медиа_при_их_отсутствии():
+    got = engine._check(Expect(media_count=2), 0, "шаг", [], [])
+    assert got[0].actual == "0: "
+
+
+def test_отчёт_о_подписи_полный():
+    got = engine._check(
+        Expect(caption_contains=["Прайс"]), 0, "шаг", [], [], [_media("photo", "Меню")]
+    )
+    assert got == [
+        Failure(
+            0,
+            "шаг",
+            "caption_missing",
+            "Прайс",
+            "Меню",
+            "подпись к файлу — та, что видит клиент",
+        )
+    ]
+
+
+def test_отчёт_о_подписи_перечисляет_все():
+    got = engine._check(
+        Expect(caption_contains=["Нет"]),
+        0,
+        "шаг",
+        [],
+        [],
+        [_media("photo", "Меню"), _media("document", "Прайс")],
+    )
+    assert got[0].actual == "Меню; Прайс"
+
+
+def test_отчёт_о_подписи_при_их_отсутствии():
+    got = engine._check(Expect(caption_contains=["Прайс"]), 0, "шаг", [], [], [_media("photo")])
+    assert got[0].actual == "(подписей нет)"
+
+
+def test_склейка_реплик_через_перевод_строки():
+    """Несколько реплик склеиваются ровно переводом строки: иначе точное
+    сравнение текста сверялось бы с испорченным «склеенным» текстом."""
+    assert not engine._check(Expect(text_equals="а\nб"), 0, "шаг", ["а", "б"], [])
+
+
+def test_склейка_подписей_через_перевод_строки():
+    media = [_media("photo", "Меню"), _media("document", "Прайс")]
+    assert not engine._check(Expect(caption_contains=["Меню\nПрайс"]), 0, "шаг", [], [], media)
+
+
+def test_отчёт_об_обрезаемом_актуальном_тексте():
+    long = "з" * 301
+    got = engine._check(Expect(text_equals="Готово"), 0, "шаг", [long], [])
+    assert got[0].actual == long[:300]
+    got2 = engine._check(Expect(text_contains=["нет"]), 0, "шаг", [long], [])
+    assert got2[0].actual == long[:300]
+
+
+# ── выбор адаптера: обе ветки и причина отказа ──────────────────────────────
+
+
+def test_обнаруженный_builder_используется(tmp_path):
+    """Если кейс не задал builder, движок обязан взять распознанный из кода.
+    Ветка «builder найден» иначе не проверяется."""
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "app.py").write_text("def create_app():\n    ...\n", encoding="utf-8")
+    assert engine._adapter_for(_case(), tmp_path) == "newgen"
+
+
+def test_неопознанный_репозиторий_объясняет_причину(tmp_path):
+    with pytest.raises(engine.RunError, match="не удалось определить поколение сборки"):
+        engine._adapter_for(_case(), tmp_path)
+
+
+# ── разбор транскрипции: точное состояние результата ────────────────────────
+
+
+def test_падение_бота_помечает_результат_errored():
+    case = _case({"send": "/start", "expect": {"text_contains": ["x"]}})
+    res = _result()
+    assert engine._consume(_turns({"kind": "crash", "error": "boom"}), case, res) is Status.ERRORED
+    assert res.status is Status.ERRORED
+    assert res.error == "бот упал: boom"
+
+
+def test_no_such_button_отчёт_полный():
+    case = _case({"click": "Купить", "expect": {"buttons_contains": ["Ок"]}})
+    res = _result()
+    turns = _turns({"kind": "no_button", "label": "Купить", "known": ["Ок", "Далее"]})
+    assert engine._consume(turns, case, res) is Status.FAILED
+    assert res.status is Status.FAILED
+    assert res.failures == [
+        Failure(
+            0,
+            "нажать «Купить»",
+            "no_such_button",
+            "кнопка «Купить»",
+            "бот предлагал: Ок; Далее",
+            "подпись сверьте с инспектором или с ответом бота",
+        )
+    ]
+
+
+def test_no_such_button_на_optional_шаге_индекс_шага_верен():
+    """Optional-шаг не роняет кейс, но индекс в отчёте обязан указывать на
+    настоящий шаг, а не на первый или выдуманный."""
+    case = _case(
+        {"send": "/start", "expect": {"silent": True}},
+        {"click": "Купить", "optional": True, "expect": {"buttons_contains": ["Ок"]}},
+    )
+    res = _result()
+    turns = _turns(
+        {"kind": "step", "text": "старт", "replies": [], "messages": [], "toasts": []},
+        {"kind": "no_button", "label": "Купить", "known": ["Ок"]},
+        {"kind": "no_button", "label": "Купить", "known": ["Ок"]},
+    )
+    assert engine._consume(turns, case, res) is Status.PASSED
+    assert [f.step_index for f in res.failures] == [1, 2]
+
+
+def test_три_шага_индекс_растёт_ровно_на_один():
+    """Если индекс шага сбивается, ожидания начинают сверяться не с тем шагом
+    и кейс «проходит» или «падает» случайно. Три шага с разными ожиданиями
+    делают сбой видимым."""
+    case = _case(
+        {"send": "а", "expect": {"text_contains": ["А"]}},
+        {"send": "б", "expect": {"text_contains": ["Б"]}},
+        {"send": "в", "expect": {"text_contains": ["В"]}},
+    )
+    res = _result()
+    turns = _turns(
+        _turn("написать «а»", ["А"]),
+        _turn("написать «б»", ["Б"]),
+        _turn("написать «в»", ["В"]),
+    )
+    assert engine._consume(turns, case, res) is Status.PASSED
+    assert res.steps_done == 3
+
+
+def test_лишний_ответ_не_сверяется_с_несуществующим_шагом():
+    """Больше ответов, чем шагов: сверх шагов ответы не проверяются и не
+    должны ронять кейс обращением к несуществующему шагу."""
+    case = _case({"send": "а", "expect": {"text_contains": ["А"]}})
+    res = _result()
+    turns = _turns(_turn("написать «а»", ["А"]), _turn("написать «а»", ["Б"]))
+    assert engine._consume(turns, case, res) is Status.PASSED
+
+
+def test_шаг_без_ожидания_пропускается():
+    """Шаг может не иметь expect — тогда сверять нечего, и движок не должен
+    звать проверку с пустым ожиданием."""
+    case = _case(
+        {"send": "а"},
+        {"send": "б", "expect": {"silent": True}},
+    )
+    res = _result()
+    turns = _turns(_turn("написать «а»", ["шум"]), _turn("написать «б»", []))
+    assert engine._consume(turns, case, res) is Status.PASSED
+
+
+def test_реплика_клиента_точная():
+    case = _case({"send": "ping", "expect": {"text_contains": ["Pong"]}})
+    res = _result()
+    engine._consume(
+        _turns({"kind": "step", "text": "написать «ping»", "replies": ["Pong"]}), case, res
+    )
+    assert res.turns[0] == Turn(text="написать «ping»", out=True)
+
+
+def test_поле_messages_имеет_приоритет_над_replies():
+    """Сообщение рисуется из messages: в replies входит и тост, и брать
+    последний элемент replies значило бы дублировать тост. Случай, где
+    messages и replies-без-тостов расходятся, ловит это."""
+    case = _case({"send": "ping", "expect": {"text_contains": ["M"]}})
+    res = _result()
+    engine._consume(
+        _turns({"kind": "step", "text": "t", "replies": ["R"], "messages": ["M"], "toasts": []}),
+        case,
+        res,
+    )
+    bot = [t for t in res.turns if not t.out]
+    assert bot == [Turn(text="M", out=False)]
+
+
+def test_тост_рисуется_отдельной_репликой():
+    case = _case({"click": "Далее", "expect": {"text_contains": ["Ок"]}})
+    res = _result()
+    engine._consume(
+        _turns(
+            {
+                "kind": "step",
+                "text": "нажать",
+                "replies": ["тост", "Ок"],
+                "messages": ["Ок"],
+                "toasts": ["тост"],
+            }
+        ),
+        case,
+        res,
+    )
+    assert Turn(text="тост", out=False, is_toast=True) in res.turns
+
+
+def test_медиа_сохраняется_на_реплике_бота():
+    case = _case({"send": "ping", "expect": {"media_kind": "photo"}})
+    res = _result()
+    engine._consume(
+        _turns(
+            {
+                "kind": "step",
+                "text": "t",
+                "replies": ["подпись"],
+                "messages": ["подпись"],
+                "toasts": [],
+                "media": [{"kind": "photo", "caption": "с"}],
+            }
+        ),
+        case,
+        res,
+    )
+    bot = [t for t in res.turns if not t.out]
+    assert bot == [Turn(text="подпись", out=False, media=[Media(kind="photo", caption="с")])]
+
+
+def test_ответ_только_медиа_даёт_пузырь_с_медиа_и_кнопками():
+    case = _case({"send": "ping", "expect": {"media_kind": "photo"}})
+    res = _result()
+    engine._consume(
+        _turns(
+            {
+                "kind": "step",
+                "text": "t",
+                "replies": [],
+                "messages": [],
+                "toasts": [],
+                "media": [{"kind": "photo"}],
+                "buttons": ["Далее"],
+            }
+        ),
+        case,
+        res,
+    )
+    bot = [t for t in res.turns if not t.out]
+    assert bot == [Turn(text="", out=False, buttons=["Далее"], media=[Media(kind="photo")])]
+
+
+def test_media_count_отчёт_точный():
+    got = engine._check(
+        Expect(media_count=3), 0, "шаг_имя", [], [], [_media("photo"), _media("document")]
+    )
+    assert got[0].step_index == 0
+    assert got[0].step_label == "шаг_имя"
+    assert got[0].kind == "media_count"
+    assert got[0].expected == "ровно 3"
+    assert got[0].actual == "2: photo; document"
+    assert got[0].hint == "число вложений в ответе"
+
+
+def test_media_kind_отчёт_точный():
+    got = engine._check(Expect(media_kind="photo"), 2, "шаг2", [], [], [_media("document")])
+    assert got[0].step_index == 2
+    assert got[0].step_label == "шаг2"
+    assert got[0].kind == "media_kind"
+    assert got[0].expected == "photo"
+    assert got[0].actual == "document"
+    assert got[0].hint == "сверьте метод отправки в коде бота (sendPhoto → photo)"
+
+
+def test_обязательный_шаг_с_ожиданием_фиксирует_точный_индекс():
+    case = _case(
+        {"send": "а", "expect": {"text_contains": ["А"]}},
+        {"send": "б", "expect": {"text_contains": ["Б"]}},
+    )
+    res = _result()
+    turns = _turns(
+        _turn("написать «а»", ["нет"]),
+        _turn("написать «б»", ["Б"]),
+    )
+    assert engine._consume(turns, case, res) is Status.FAILED
+    assert res.failures[0].step_index == 0
+    assert res.failures[0].step_label == "написать «а»"

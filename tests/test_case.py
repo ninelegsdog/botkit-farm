@@ -260,3 +260,69 @@ def test_pick_и_click_вместе_отвергаются():
                 "steps": [{"click": "Далее", "pick": "first", "expect": {"silent": True}}],
             }
         )
+
+
+def test_step_label_обрезается_до_сорока_символов():
+    text = "x" * 50
+    case = Case.model_validate(
+        {
+            "id": "x-y",
+            "title": "Test",
+            "source": ".",
+            "steps": [{"send": text, "expect": {"silent": True}}],
+        }
+    )
+    assert case.steps[0].label() == f"написать «{'x' * 40}»"
+
+
+def test_step_label_берёт_первую_строку():
+    case = Case.model_validate(
+        {
+            "id": "x-y",
+            "title": "Test",
+            "source": ".",
+            "steps": [{"send": "первая\nвторая", "expect": {"silent": True}}],
+        }
+    )
+    assert case.steps[0].label() == "написать «первая»"
+
+
+def test_step_label_для_click_pick():
+    case2 = Case.model_validate(
+        {
+            "id": "x-y2",
+            "title": "Test",
+            "source": ".",
+            "steps": [{"click": "Далее", "expect": {"silent": True}}],
+        }
+    )
+    assert case2.steps[0].label() == "нажать «Далее»"
+
+    case3 = Case.model_validate(
+        {
+            "id": "x-y3",
+            "title": "Test",
+            "source": ".",
+            "steps": [{"pick": "2", "expect": {"silent": True}}],
+        }
+    )
+    assert case3.steps[0].label() == "нажать кнопку 2"
+
+
+def test_step_label_использует_ровно_сорок_символов():
+    # Проверяем точный подсчёт: внутри кавычек ровно 40 символов
+    text = "y" * 41
+    case = Case.model_validate(
+        {
+            "id": "x-yz",
+            "title": "Test",
+            "source": ".",
+            "steps": [{"send": text, "expect": {"silent": True}}],
+        }
+    )
+    lbl = case.steps[0].label()
+    # "написать «" + head[:40] + "»"
+    assert lbl.startswith("написать «")
+    assert lbl.endswith("»")
+    inner = lbl[10:-1]  # предположение
+    assert len(inner) == 40

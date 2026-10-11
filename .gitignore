@@ -44,3 +44,7 @@ local_cache/
 htmlcov/
 *.sqlite
 *.db
+
+# Мутационное тестирование: рабочие копии мутантов и отчёты, не исходники.
+mutants/
+.mutmut-cache

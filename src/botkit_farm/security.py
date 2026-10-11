@@ -71,7 +71,11 @@ def assert_fake_token(env: Mapping[str, object] | None = None) -> None:
 
 # Локальные адреса, куда egress разрешён: фейковый API и Redis стоят на loopback.
 def _is_local(host: str) -> bool:
-    if host in {"localhost", "127.0.0.1", "::1"}:
+    # "localhost" — единственное имя, которое не разбирается как IP; числовые
+    # loopback-адреса (127.0.0.1, ::1) проверяет ipaddress. Дублировать их в
+    # множестве значило бы держать ветку, которую мутационный тест не может
+    # отличить (её результат совпадает с is_loopback).
+    if host == "localhost":
         return True
     try:
         return ipaddress.ip_address(host).is_loopback
@@ -189,7 +193,9 @@ def scrub(text: str) -> tuple[str, list[str]]:
     out = text
     for pat in SECRET_PATTERNS:
         for m in pat.findall(out):
-            found.append(m if isinstance(m, str) else str(m))
+            # findall отдаёт либо строку, либо кортеж групп; приводим к строке,
+            # чтобы запись о находке не зависела от формы конкретной регулярки.
+            found.append(str(m))
             out = pat.sub("[скрыто фермой]", out)
     return out, found
 
