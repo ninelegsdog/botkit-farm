@@ -23,7 +23,7 @@ from botkit_farm import security
 from botkit_farm.adapters import registry as adapters
 from botkit_farm.adapters.registry import AdapterRef
 from botkit_farm.case.model import Case
-from botkit_farm.runner import engine
+from botkit_farm.runner import engine, parallel
 from botkit_farm.runner.contract import StepTurn, parse_turns
 from botkit_farm.runner.host import ExecResult
 from botkit_farm.runner.result import Status
@@ -397,6 +397,7 @@ def test_каждый_вызов_получает_свои_аргументы(tm
     assert kw["bot_dir"] == bot
     assert kw["bot_python"] == cache / "bin" / "python"
     assert kw["farm_src"] == engine._farm_src()
+    assert kw["redis_url"] == parallel.redis_url()
 
 
 def _кейс(*steps: Any, **kw: Any) -> Case:

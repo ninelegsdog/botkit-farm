@@ -23,6 +23,7 @@ from botkit_farm.adapters.registry import AdapterRef
 from botkit_farm.case import template as tmpl
 from botkit_farm.case.model import Case, Expect
 from botkit_farm.inspector.repo import detect_builder
+from botkit_farm.runner import parallel
 from botkit_farm.runner.contract import CrashTurn, HostTurn, Media, NoButtonTurn
 from botkit_farm.runner.host import ExecResult, run_bot
 from botkit_farm.runner.result import CaseResult, Failure, Status, Turn
@@ -257,6 +258,7 @@ def run_case(
             fixture=fixture,
             steps=steps,
             db_path=db_path,
+            redis_url=parallel.redis_url(),
             actors=actors_data,  # type: ignore[arg-type]
             chat=chat_data,  # type: ignore[arg-type]
             # Каталог с venv бота: он лежит рядом с репозиторием, а не внутри
