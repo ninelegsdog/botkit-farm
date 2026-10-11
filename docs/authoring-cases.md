@@ -22,6 +22,7 @@ id: booking-happy-path        # [a-z0-9_-], станет именем отчёт
 title: Запись клиента — полный путь
 source: ./bots/botkit-bookingbot
 builder: legacy               # legacy | newgen | reminder или ссылка на плагин
+raw: false                    # true — бот сам разбирает сырой JSON (см. ниже)
 fixture: bookingbot           # модуль с seed(db), если нужны данные
 frame: window
 
@@ -36,6 +37,16 @@ steps:
 `src/botkit_farm/case/model.py`. Для бота с собственным композиционным корнем
 `builder` принимает ссылку `botkit-farm.adapter:<модуль>` — контракт и
 референсные сборки в [adapters/](adapters/README.md).
+
+### Сырой режим (`raw`)
+
+По умолчанию шаг отдаётся диспетчеру готовым объектом `Update`. С `raw: true`
+тот же шаг превращается в JSON, как его присылает Telegram, и бот разбирает его
+сам (`feed_raw_update` → `Update.model_validate`). Диалог не меняется, но
+добавляется проверка **десериализации** — пути, которым Update приходит из
+polling/webhook, и самого частого класса багов: бот полагается на поле, которого
+в сыром JSON нет. Режим выключен по умолчанию; если кейс с `raw: true` падает там,
+где с `false` проходит, — это проблема разбора Update у бота, а не логики.
 
 ### Три вида шага
 

@@ -92,3 +92,23 @@ def to_message(text: str, update_id: int) -> Any:
 def to_callback(data: str, update_id: int, bot_message_id: int = 1) -> Any:
     """Update с нажатием inline-кнопки (callback_data)."""
     return to_update(Step("cb", data), update_id, bot_message_id)
+
+
+def to_raw_update(update: Any) -> dict[str, Any]:
+    """Update → JSON-словарь в том виде, в каком его присылает Telegram.
+
+    Режим `raw` (ТЗ C2): вместо готового объекта `Update` диспетчеру отдаётся
+    словарь, и бот сам его разбирает (`feed_raw_update` → `Update.model_validate`).
+    Это дороже, но проверяет ровно тот путь, каким Update приходит в проде с
+    webhook или из polling: десериализацию. Самый частый класс багов — бот
+    полагается на поле, которого в сыром JSON нет.
+
+    `model_dump(mode="json")` даёт ровно Telegram-представление: даты — числом
+    (unix-время), вложенные объекты — словарями. `exclude_none` убирает
+    отсутствующие поля, как их не присылает Telegram; оставлять `null` значило
+    бы проверять не тот JSON, что приходит в жизни.
+    """
+    # `update` типизирован Any (это объект aiogram из чужого окружения), поэтому
+    # результат dump тоже Any; аннотация возврата держит границу типизированной.
+    dumped: dict[str, Any] = update.model_dump(mode="json", by_alias=True, exclude_none=True)
+    return dumped

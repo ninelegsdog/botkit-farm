@@ -366,6 +366,7 @@ def test_каждый_вызов_получает_свои_аргументы(tm
     assert kw["adapter_args"] == ("booking", bot)
     assert kw["adapter_module"] == "botkit_farm.adapters.newgen"
     assert kw["adapter_attr"] == "build"
+    assert kw["raw"] is False
     assert kw["env_args"] == (bot, cache)
     assert kw["commit_root"] == bot
     assert kw["bot_dir"] == bot
@@ -457,6 +458,17 @@ def test_сторонний_адаптер_доходит_до_хоста_раз
     assert res.builder == "botkit-farm.adapter:mypkg.plug:make"
     assert окружение.вызовы["adapter_module"] == "mypkg.plug"
     assert окружение.вызовы["adapter_attr"] == "make"
+
+
+def test_сырой_режим_из_кейса_доходит_до_хоста(tmp_path, monkeypatch) -> None:
+    case = _кейс(raw=True)
+    окружение = _Окружение(tmp_path, monkeypatch, ExecResult(turns=[]))
+
+    engine.run_case(
+        case, bot_dir=tmp_path / "bot", cache_dir=tmp_path / "envs", work_dir=tmp_path / ".work"
+    )
+
+    assert окружение.вызовы["raw"] is True
 
 
 def test_база_обнуляется_перед_каждым_прогоном(tmp_path, monkeypatch) -> None:

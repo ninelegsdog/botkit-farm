@@ -234,6 +234,7 @@ def run_case(
             bot_dir=bot_dir,
             adapter_module=ref.module,
             adapter_attr=ref.attr,
+            raw=case.raw,
             port=port,
             fixture=fixture,
             steps=steps,

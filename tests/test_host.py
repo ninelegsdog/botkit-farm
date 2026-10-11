@@ -85,6 +85,7 @@ def test_хост_получает_модуль_и_фабрику_адаптер
         bot_dir=tmp_path / "bot",
         adapter_module="mypkg.mine",
         adapter_attr="make",
+        raw=False,
         port=8100,
         fixture=None,
         steps=[],
@@ -93,5 +94,36 @@ def test_хост_получает_модуль_и_фабрику_адаптер
 
     assert "ADAPTER_MODULE = 'mypkg.mine'" in seen["script"]
     assert "ADAPTER_ATTR = 'make'" in seen["script"]
+    assert "RAW = False" in seen["script"]
     assert res.error == ""
     assert res.turns == []
+
+
+def test_сырой_режим_включается_в_скрипте_хоста(tmp_path: pathlib.Path, monkeypatch) -> None:
+    """`raw` из кейса доходит до скрипта и включает разбор JSON, а не объекта."""
+    seen: dict[str, object] = {}
+    monkeypatch.delenv("BOTKIT_FARM_SANDBOX", raising=False)
+
+    def fake_run(cmd: list[str], **kw: object) -> SimpleNamespace:
+        script = pathlib.Path(cmd[-1])
+        seen["script"] = script.read_text(encoding="utf-8")
+        (script.parent / "result.json").write_text("[]", encoding="utf-8")
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(host.subprocess, "run", fake_run)
+
+    host.run_bot(
+        farm_src=tmp_path,
+        bot_python=tmp_path / "py",
+        bot_dir=tmp_path / "bot",
+        adapter_module="botkit_farm.adapters.newgen",
+        adapter_attr="build",
+        raw=True,
+        port=8101,
+        fixture=None,
+        steps=[],
+        db_path=tmp_path / "b.db",
+    )
+
+    assert "RAW = True" in seen["script"]
+    assert "feed_raw_update" in seen["script"]

@@ -192,6 +192,25 @@ def test_отсутствие_builder_допустимо():
     assert case.builder is None
 
 
+def test_сырой_режим_по_умолчанию_выключен():
+    """Обратная совместимость: старые кейсы ведут себя как раньше."""
+    case = _кейс_с_builder("newgen")
+    assert case.raw is False
+
+
+def test_сырой_режим_включается():
+    case = Case.model_validate(
+        {
+            "id": "x-y",
+            "title": "Сырой режим",
+            "source": ".",
+            "steps": [{"send": "/start", "expect": {"silent": True}}],
+            "raw": True,
+        }
+    )
+    assert case.raw is True
+
+
 @pytest.mark.parametrize("bad_id", ["Плохой", "../escape", "with space", "UPPER"])
 def test_ид_с_небезопасными_символами_отвергается(bad_id):
     """id попадает в имя файла отчёта и путь кадра — с ../ он бы ушёл из каталога."""

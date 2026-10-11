@@ -43,6 +43,7 @@ from botkit_farm.adapters import contract as adapter_contract
 ADAPTER_MODULE = {adapter_module!r}
 ADAPTER_ATTR = {adapter_attr!r}
 BOT_DIR = {bot_dir!r}
+RAW = {raw!r}
 PORT = {port!r}
 RESULT = {result!r}
 DB_PATH = {db_path!r}
@@ -151,7 +152,13 @@ async def main():
             uid += 1
             before = len(rec.calls)
             try:
-                await dp.feed_update(bot, update)
+                if RAW:
+                    # Сырой режим: бот сам разбирает JSON (feed_raw_update →
+                    # Update.model_validate), как при webhook. Тот же Update, но
+                    # пройденный через сериализацию, — проверяется десериализация.
+                    await dp.feed_raw_update(bot, scene.to_raw_update(update))
+                else:
+                    await dp.feed_update(bot, update)
             except Exception as exc:
                 turns.append({{"kind": "crash", "error": type(exc).__name__ + ": " + str(exc)}})
                 break
@@ -235,6 +242,7 @@ def run_bot(
     bot_dir: pathlib.Path,
     adapter_module: str,
     adapter_attr: str,
+    raw: bool,
     port: int,
     fixture: pathlib.Path | None,
     steps: list[dict[str, object]],
@@ -265,6 +273,7 @@ def run_bot(
             farm_src=str(farm_src),
             adapter_module=adapter_module,
             adapter_attr=adapter_attr,
+            raw=raw,
             bot_dir=str(bot_dir),
             port=port,
             db_path=str(db_path),

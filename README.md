@@ -54,6 +54,7 @@ id: booking-start          # только [a-z0-9_-], станет именем 
 title: Стартовое меню записи
 source: ../bots/botkit-bookingbot   # локальный путь или https/git-URL
 builder: newgen            # legacy | newgen | reminder (или сторонний адаптер)
+raw: false                 # true — бот сам разбирает сырой JSON (см. ниже)
 frame: window              # window | phone | wide — как снимать кадр
 
 steps:
@@ -79,6 +80,11 @@ builder: botkit-farm.adapter:mypkg.adapters.mine   # модуль ставитс
 ```
 
 Контракт адаптера и четыре референсных сборки — в [docs/adapters/](docs/adapters/README.md).
+
+`raw: true` заставляет ферму отдавать боту не готовый объект `Update`, а тот же
+шаг в виде JSON, как его присылает Telegram (`feed_raw_update`). Диалог тот же,
+но проверяется ещё и **десериализация** — путь из polling/webhook в проде и самый
+частый класс багов: бот полагается на поле, которого в сыром JSON нет.
 
 ## Команды
 
