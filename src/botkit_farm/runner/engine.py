@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import pathlib
 import time
+from dataclasses import dataclass, replace
 from typing import Any
 
 from botkit_farm import env as envmod
@@ -19,6 +20,7 @@ from botkit_farm import fixtures as fx
 from botkit_farm import security
 from botkit_farm.adapters import registry as adapters
 from botkit_farm.adapters.registry import AdapterRef
+from botkit_farm.case import template as tmpl
 from botkit_farm.case.model import Case, Expect
 from botkit_farm.inspector.repo import detect_builder
 from botkit_farm.runner.contract import CrashTurn, HostTurn, Media, NoButtonTurn
@@ -214,7 +216,7 @@ def run_case(
         e = envmod.ensure_env(bot_dir, cache_dir)
         fixture = fx.path_for(case.fixture) if case.seed and case.fixture else None
 
-        steps = _to_steps(case, default_gap)
+        steps = _to_steps(_plan(case), default_gap)
         port = _api_port(case.id)
         # БД начинается с нуля на каждый прогон: иначе второй запуск продолжил бы
         # диалог с середины, и кейс падал бы не из-за кода бота.
@@ -280,29 +282,140 @@ def run_case(
     return result
 
 
-def _to_steps(case: Case, default_gap: float) -> list[dict[str, Any]]:
-    """Кейс → список шагов для подпроцесса."""
+@dataclass(frozen=True)
+class _Planned:
+    """Шаг после разворачивания повторов и подстановки шаблонов.
+
+    `repeat` превращает один шаг кейса в несколько планируемых: у каждого свой
+    индекс `i` из `n`. Дальше и хост, и сверка работают с этим плоским списком —
+    иначе `case.steps` перестал бы соответствовать числу транскрипций, и ожидание
+    сверялось бы не с тем шагом.
+    """
+
+    label: str
+    kind: str  # msg | cb | pick | choice
+    value: str = ""
+    options: tuple[dict[str, str], ...] = ()
+    expect: Expect | None = None
+    as_: str | None = None
+    pause: float | None = None
+    optional: bool = False
+    index: int = 0
+    total: int = 1
+
+
+def _действие(send: str | None, click: str | None, pick: str | None) -> tuple[str, str]:
+    """Вид действия и его значение. Порядок совпадает с приоритетом в модели."""
+    if click is not None:
+        return "cb", click
+    if pick is not None:
+        return "pick", pick
+    return "msg", str(send)
+
+
+def _подпись(kind: str, value: str) -> str:
+    """Имя действия по его виду и (уже отрендеренному) значению."""
+    if kind == "cb":
+        return f"нажать «{value}»"
+    if kind == "pick":
+        return f"нажать кнопку {value}"
+    head = value.splitlines()[0][:40]
+    return f"написать «{head}»"
+
+
+def _plan(case: Case) -> list[_Planned]:
+    """Кейс → плоский план шагов: развернуть `repeat`, отрендерить действия.
+
+    Действия рендерятся здесь, до запуска бота: им доступен только индекс
+    повтора (`i`, `n`), потому что ответов бота на этот момент ещё нет. Ожидания
+    рендерятся позже, в `_consume`, где прошлые ответы уже известны.
+    """
+    plan: list[_Planned] = []
+    for n, st in enumerate(case.steps, start=1):
+        count = st.repeat or 1
+        for i in range(count):
+            ctx = {"i": i, "n": count}
+            where = f"{case.id}: шаг {n}"
+            if st.choice:
+                options: list[dict[str, str]] = []
+                for b in st.choice:
+                    kind, value = _действие(b.send, b.click, b.pick)
+                    options.append({"kind": kind, "value": tmpl.render(value, ctx, where)})
+                label = f"выбрать доступное действие ({_подпись(options[0]['kind'], options[0]['value'])})"
+                item = _Planned(
+                    label=label,
+                    kind="choice",
+                    options=tuple(options),
+                    expect=st.expect,
+                    as_=st.as_,
+                    pause=st.pause,
+                    optional=st.optional,
+                    index=i,
+                    total=count,
+                )
+            else:
+                kind, value = _действие(st.send, st.click, st.pick)
+                rendered = tmpl.render(value, ctx, where)
+                item = _Planned(
+                    label=_подпись(kind, rendered),
+                    kind=kind,
+                    value=rendered,
+                    expect=st.expect,
+                    as_=st.as_,
+                    pause=st.pause,
+                    optional=st.optional,
+                    index=i,
+                    total=count,
+                )
+            if count > 1:
+                item = replace(item, label=f"{item.label} [{i + 1}/{count}]")
+            plan.append(item)
+    return plan
+
+
+def _to_steps(plan: list[_Planned], default_gap: float) -> list[dict[str, Any]]:
+    """План → список шагов для подпроцесса."""
     out: list[dict[str, Any]] = []
-    for st in case.steps:
-        if st.click is not None:
-            out.append({"kind": "cb", "value": st.click, "label": st.label()})
-        elif st.pick is not None:
-            out.append({"kind": "pick", "value": st.pick, "label": st.label()})
+    for p in plan:
+        step: dict[str, Any] = {"kind": p.kind, "label": p.label}
+        if p.kind == "choice":
+            step["options"] = list(p.options)
         else:
-            out.append({"kind": "msg", "value": str(st.send), "label": st.label()})
+            step["value"] = p.value
         # Роль исполнителя шага (ТЗ C3)
-        if st.as_:
-            out[-1]["as"] = st.as_
-        if st.pause is not None:
-            out[-1]["pause"] = st.pause
+        if p.as_:
+            step["as"] = p.as_
+        if p.pause is not None:
+            step["pause"] = p.pause
         else:
-            out[-1]["gap"] = default_gap
+            step["gap"] = default_gap
+        out.append(step)
     return out
+
+
+def _render_expect(exp: Expect, ctx: dict[str, object], where: str) -> Expect:
+    """Отрендерить шаблонные строки ожидания, не трогая остальные поля.
+
+    Только строки-шаблоны: `silent`, счётчики и медиа-поля передаются как есть.
+    """
+    return exp.model_copy(
+        update={
+            "text_equals": (
+                tmpl.render(exp.text_equals, ctx, where) if exp.text_equals is not None else None
+            ),
+            "text_contains": [tmpl.render(t, ctx, where) for t in exp.text_contains],
+            "buttons_contains": [tmpl.render(t, ctx, where) for t in exp.buttons_contains],
+            "caption_contains": [tmpl.render(t, ctx, where) for t in exp.caption_contains],
+        }
+    )
 
 
 def _consume(turns: list[HostTurn], case: Case, result: CaseResult) -> Status:
     """Разобрать транскрипцию: собрать реплики, сверить ожидания, вынести вердикт."""
     status = Status.PASSED
+    plan = _plan(case)
+    # Прошлые ответы бота — контекст `turns` для шаблонов ожиданий.
+    replies_seen: list[str] = []
     idx = 0
     for turn in turns:
         if isinstance(turn, CrashTurn):
@@ -322,8 +435,8 @@ def _consume(turns: list[HostTurn], case: Case, result: CaseResult) -> Status:
                 )
             )
             result.status = Status.FAILED
-            step = case.steps[min(idx, len(case.steps) - 1)]
-            if not step.optional:
+            planned = plan[min(idx, len(plan) - 1)]
+            if not planned.optional:
                 return Status.FAILED
             idx += 1
             continue
@@ -361,15 +474,21 @@ def _consume(turns: list[HostTurn], case: Case, result: CaseResult) -> Status:
             # иначе одна и та же подпись попала бы в кадр дважды.
             result.turns.append(Turn(text="", out=False, buttons=buttons, media=media))
 
-        step = case.steps[min(idx, len(case.steps) - 1)]
+        planned = plan[min(idx, len(plan) - 1)]
         result.steps_done = idx + 1
-        if step.expect and idx < len(case.steps):
-            fails = _check(step.expect, idx, step.label(), replies, buttons, media)
+        # Ожидание рендерим здесь, а не при загрузке: только теперь известны
+        # прошлые ответы (`turns`). Индекс повтора берём из плана. Лишние
+        # транскрипции сверх плана не проверяем: сверять их не с чем.
+        if planned.expect is not None and idx < len(plan):
+            ctx = {"i": planned.index, "n": planned.total, "turns": list(replies_seen)}
+            expect = _render_expect(planned.expect, ctx, planned.label)
+            fails = _check(expect, idx, planned.label, replies, buttons, media)
             if fails:
                 result.failures.extend(fails)
-                if not step.optional:
+                if not planned.optional:
                     result.status = Status.FAILED
                     return Status.FAILED
+        replies_seen.extend(messages)
         idx += 1
     return status
 
@@ -386,7 +505,9 @@ def _начальный_результат(case: Case, bot_dir: pathlib.Path) ->
         case_id=case.id,
         title=case.title,
         status=Status.ERRORED,
-        steps_total=len(case.steps),
+        # Длина плоского плана, а не `case.steps`: `repeat` разворачивает один
+        # шаг в несколько, и отчёт обязан считать по факту прогона.
+        steps_total=len(_plan(case)),
         repo=str(bot_dir),
     )
 

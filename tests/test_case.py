@@ -95,6 +95,66 @@ def test_ни_одного_действия_отвергается():
         )
 
 
+def test_choice_вместе_с_send_отвергается():
+    with pytest.raises(ValueError, match="ровно один"):
+        Case.model_validate(
+            {
+                "id": "x-y",
+                "title": "И choice, и send",
+                "source": ".",
+                "steps": [
+                    {
+                        "send": "/start",
+                        "choice": [{"click": "Далее"}],
+                        "expect": {"silent": True},
+                    }
+                ],
+            }
+        )
+
+
+def test_ветка_choice_с_двумя_действиями_отвергается():
+    with pytest.raises(ValueError, match="вариант choice"):
+        Case.model_validate(
+            {
+                "id": "x-y",
+                "title": "Ветка с двумя действиями",
+                "source": ".",
+                "steps": [
+                    {
+                        "choice": [{"send": "а", "click": "б"}],
+                        "expect": {"silent": True},
+                    }
+                ],
+            }
+        )
+
+
+@pytest.mark.parametrize("repeat", [0, 101])
+def test_repeat_вне_границ_отвергается(repeat):
+    with pytest.raises(ValueError):
+        Case.model_validate(
+            {
+                "id": "x-y",
+                "title": "Неверный repeat",
+                "source": ".",
+                "steps": [{"send": "а", "repeat": repeat, "expect": {"silent": True}}],
+            }
+        )
+
+
+def test_label_для_choice_называет_первую_ветку():
+    case = Case.model_validate(
+        {
+            "id": "x-y",
+            "title": "Choice",
+            "source": ".",
+            "steps": [{"choice": [{"click": "Купить"}], "expect": {"silent": True}}],
+        }
+    )
+    assert case.steps[0].label() == "выбрать доступное действие (нажать «Купить»)"
+
+
 def test_equals_и_contains_вместе_отвергаются():
     with pytest.raises(ValueError, match="text_equals и text_contains"):
         Case.model_validate(
@@ -259,9 +319,11 @@ def test_ид_с_небезопасными_символами_отвергае�
 # ── загрузчик ───────────────────────────────────────────────────────────────
 
 
-def test_незаполненный_слот_ловится_до_запуска_бота(tmp_path):
+def test_неизвестная_переменная_шаблона_ловится_до_запуска_бота(tmp_path):
+    """С C6 `{{…}}` — это шаблон Jinja2, а не слот. Но неизвестная переменная —
+    такой же отказ на чтении: кейс обязан падать до того, как снесено состояние."""
     text = GOOD.replace("Запись", "{{текст_меню}}")
-    with pytest.raises(CaseError, match="незаполненные слоты"):
+    with pytest.raises(CaseError, match="неизвестные переменные"):
         load_file(_write(tmp_path, text))
 
 
@@ -269,6 +331,87 @@ def test_слово_заглушка_ловится(tmp_path):
     text = GOOD.replace("Запись", "TODO: взять из кода")
     with pytest.raises(CaseError, match="заглушки"):
         load_file(_write(tmp_path, text))
+
+
+def _кейс_yaml(steps: str, extra: str = "") -> str:
+    return f"""
+id: c-1
+title: Шаблоны
+source: .
+{extra}steps:
+{steps}
+"""
+
+
+def test_шаблон_с_индексом_повтора_принимается(tmp_path):
+    text = _кейс_yaml(
+        """  - send: "Товар {{ i }}"
+    repeat: 3
+    expect:
+      text_contains: ["Готово"]
+"""
+    )
+    case = load_file(_write(tmp_path, text))
+    assert case.steps[0].repeat == 3
+
+
+def test_turns_в_действии_отвергается(tmp_path):
+    """Действие рендерится до прогона — прошлых ответов ещё не существует."""
+    text = _кейс_yaml(
+        """  - send: "{{ turns[-1] }}"
+    expect:
+      text_contains: ["Готово"]
+"""
+    )
+    with pytest.raises(CaseError, match="turns"):
+        load_file(_write(tmp_path, text))
+
+
+def test_turns_в_ожидании_принимается(tmp_path):
+    text = _кейс_yaml(
+        """  - send: /start
+    expect:
+      text_contains: ["{{ turns[-1] }}"]
+"""
+    )
+    load_file(_write(tmp_path, text))
+
+
+def test_неизвестная_переменная_в_ожидании_отвергается(tmp_path):
+    text = _кейс_yaml(
+        """  - send: /start
+    expect:
+      text_contains: ["{{ секрет }}"]
+"""
+    )
+    with pytest.raises(CaseError, match="неизвестные переменные"):
+        load_file(_write(tmp_path, text))
+
+
+def test_исполнение_кода_в_шаблоне_отвергается(tmp_path):
+    text = _кейс_yaml(
+        """  - send: "{{ ''.__class__ }}"
+    expect:
+      text_contains: ["Готово"]
+"""
+    )
+    with pytest.raises(CaseError, match="приватн"):
+        load_file(_write(tmp_path, text))
+
+
+def test_кейс_на_40_шагов_читается(tmp_path):
+    """ТЗ C6 (М): длинный кейс обязан читаться, а не упираться в лимиты.
+
+    Сорок явных шагов — это «поддерживаемый» сценарий: ни модель, ни загрузчик
+    не должны ломаться на длине (важно и для сгенерированных кейсов).
+    """
+    steps = "\n".join(
+        f'  - send: "шаг {n}"\n    expect:\n      text_contains: ["ок"]' for n in range(1, 41)
+    )
+    case = load_file(_write(tmp_path, _кейс_yaml(steps + "\n")))
+    assert len(case.steps) == 40
+    assert case.steps[0].send == "шаг 1"
+    assert case.steps[-1].send == "шаг 40"
 
 
 def test_битый_yaml_даёт_понятную_ошибку(tmp_path):

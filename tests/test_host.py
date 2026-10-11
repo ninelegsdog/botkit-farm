@@ -225,3 +225,51 @@ def test_порт_webhook_по_умолчанию_рядом_с_портом_api
 
     assert "PORT = 8100" in seen["script"]
     assert "WEBHOOK_PORT = 8101" in seen["script"]
+
+
+def test_шаг_choice_доходит_до_хоста_вместе_с_вариантами(
+    tmp_path: pathlib.Path, monkeypatch
+) -> None:
+    """Варианты `choice` уходят в подпроцесс, а скрипт умеет выбрать доступный.
+
+    Логика выбора исполняется только в подпроцессе (нужен живой бот), поэтому
+    здесь проверяется граница: шаг с `options` доезжает до `steps.json`, а
+    скрипт содержит разбор `choice` и предикат доступности.
+    """
+    seen: dict[str, object] = {}
+    monkeypatch.delenv("BOTKIT_FARM_SANDBOX", raising=False)
+
+    def fake_run(cmd: list[str], **kw: object) -> SimpleNamespace:
+        script = pathlib.Path(cmd[-1])
+        seen["script"] = script.read_text(encoding="utf-8")
+        seen["steps"] = json.loads((script.parent / "steps.json").read_text(encoding="utf-8"))
+        (script.parent / "result.json").write_text("[]", encoding="utf-8")
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(host.subprocess, "run", fake_run)
+
+    steps = [
+        {
+            "kind": "choice",
+            "label": "выбрать доступное действие",
+            "options": [{"kind": "cb", "value": "Далее"}],
+            "gap": 1.0,
+        }
+    ]
+    host.run_bot(
+        farm_src=tmp_path,
+        bot_python=tmp_path / "py",
+        bot_dir=tmp_path / "bot",
+        adapter_module="botkit_farm.adapters.newgen",
+        adapter_attr="build",
+        raw=False,
+        mode="polling",
+        port=8100,
+        fixture=None,
+        steps=steps,
+        db_path=tmp_path / "b.db",
+    )
+
+    assert seen["steps"] == steps
+    assert "def _available(" in seen["script"]
+    assert 'if kind == "choice":' in seen["script"]

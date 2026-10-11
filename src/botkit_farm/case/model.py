@@ -118,6 +118,40 @@ class Expect(Strict):
         return self
 
 
+class Branch(Strict):
+    """Один вариант действия внутри `choice:` (ТЗ C6).
+
+    Ветка — это такое же действие, как шаг (send/click/pick), но без ожидания и
+    повтора: `choice` сам решает, какую ветку выполнить, — первую, чья цель
+    доступна боту сейчас. Так кейс описывает бота, у которого кнопка появляется
+    не всегда (закрыть тикет можно, только если тикет открыт).
+    """
+
+    send: str | None = Field(default=None, max_length=MAX_TEXT)
+    click: str | None = Field(default=None, max_length=256)
+    pick: str | None = Field(default=None, pattern=r"^(first|last|[0-9]+)$")
+
+    @model_validator(mode="after")
+    def _одно_действие(self) -> Branch:
+        given = [x for x in (self.send, self.click, self.pick) if x is not None]
+        if len(given) != 1:
+            raise ValueError(
+                "вариант choice: ровно один из send, click, pick — не несколько и не ни одного"
+            )
+        if self.send is not None and not self.send.strip():
+            raise ValueError("send пустой: бот не получит ничего")
+        return self
+
+    def label(self) -> str:
+        """Имя варианта для подписи шага в отчёте."""
+        if self.click is not None:
+            return f"нажать «{self.click}»"
+        if self.pick is not None:
+            return f"нажать кнопку {self.pick}"
+        head = str(self.send).splitlines()[0][:40]
+        return f"написать «{head}»"
+
+
 class Step(Strict):
     """Один шаг диалога.
 
@@ -134,6 +168,13 @@ class Step(Strict):
     # идентификаторы, слоты. Зашивать их в кейс нельзя: завтра они изменятся,
     # и кейс упадёт не из-за кода бота, а из-за своей устаревшей копии.
     pick: str | None = Field(default=None, pattern=r"^(first|last|[0-9]+)$")
+    # Несколько допустимых действий — выполняется первое доступное (ТЗ C6).
+    # Пусто и вместе с send/click/pick запрещено: шаг делает ровно одно.
+    choice: list[Branch] | None = None
+    # Сколько раз повторить шаг (ТЗ C6). Действия внутри переменно получают `i`
+    # (с нуля) и `n` (всего повторов) — так корзина из пяти товаров пишется
+    # одним шагом, а не пятью копиями.
+    repeat: int | None = Field(default=None, ge=1, le=100)
     # Ожидание относится именно к этому шагу. Не переносится на следующий:
     # «ответ на /start» и «ответ на кнопку» — разные утверждения.
     expect: Expect | None = None
@@ -153,9 +194,11 @@ class Step(Strict):
     @model_validator(mode="after")
     def _одно_действие(self) -> Step:
         given = [x for x in (self.send, self.click, self.pick) if x is not None]
-        if len(given) != 1:
+        has_choice = bool(self.choice)
+        if len(given) + int(has_choice) != 1:
             raise ValueError(
-                "шаг должен быть ровно один из send, click, pick — не несколько и не ни одного"
+                "шаг должен быть ровно один из send, click, pick или choice — "
+                "не несколько и не ни одного"
             )
         if self.send is not None and not self.send.strip():
             raise ValueError("send пустой: бот не получит ничего")
@@ -167,6 +210,9 @@ class Step(Strict):
             return f"нажать «{self.click}»"
         if self.pick is not None:
             return f"нажать кнопку {self.pick}"
+        if self.choice:
+            first = self.choice[0].label()
+            return f"выбрать доступное действие ({first})"
         head = str(self.send).splitlines()[0][:40]
         return f"написать «{head}»"
 
@@ -291,18 +337,11 @@ class Case(Strict):
         return self
 
 
-# Плейсхолдеры вида {{...}} — незаполненные слоты. Проверка на этапе загрузки,
-# а не на этапе рендера: незаполненный кейс должен падать до того, как бот
-# запущен и база стёрта.
-_SLOT = re.compile(r"\{\{[^}]*\}\}")
-
-# Значения, которые почти наверняка означают, что кейс не доделан.
+# Значения, которые почти наверняка означают, что кейс не доделан. Слоты
+# `{{…}}` больше сюда не входят: с C6 это шаблоны Jinja2, и их проверяет
+# `case/template.py` (неизвестная переменная — отказ с именем). Слова-заглушки
+# остаются: их ни шаблон, ни раннер осмыслить не могут.
 _PLACEHOLDERS = re.compile(r"(?i)\b(TODO|FIXME|XXX|заглушка|позже|дописать|уточнить)\b")
-
-
-def find_slots(text: str) -> list[str]:
-    """Найти незаполненные слоты в тексте кейса."""
-    return _SLOT.findall(text)
 
 
 def find_placeholders(text: str) -> list[str]:
@@ -312,11 +351,11 @@ def find_placeholders(text: str) -> list[str]:
 
 __all__ = [
     "Actor",
+    "Branch",
     "Case",
     "ChatSpec",
     "Expect",
     "Step",
     "MAX_TEXT",
-    "find_slots",
     "find_placeholders",
 ]

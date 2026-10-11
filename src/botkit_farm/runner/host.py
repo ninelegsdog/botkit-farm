@@ -180,6 +180,26 @@ async def _wait_webhook(rec, before, quiet=0.2, cap=2.0):
             break
 
 
+def _available(kind, value, known, last_buttons):
+    # Доступно ли действие варианта `choice` прямо сейчас (ТЗ C6).
+    # msg доступен всегда; кнопка — если бот её предлагает в прошлом ответе;
+    # pick — если у прошлого ответа есть кнопка на нужной позиции.
+    if kind == "msg":
+        return True
+    if kind == "cb":
+        return value in known.values()
+    buttons = last_buttons or []
+    if not buttons:
+        return False
+    if value in ("first", "last"):
+        return True
+    try:
+        pos = int(value)
+    except ValueError:
+        return False
+    return 0 <= pos < len(buttons)
+
+
 async def main():
     rec = fake_api.Recorder()
     runner = await fake_api.serve(rec, port=PORT)
@@ -213,7 +233,24 @@ async def main():
                 await asyncio.sleep(float(step["pause"]))
             elif step.get("gap"):
                 await asyncio.sleep(float(step["gap"]))
-            if step["kind"] == "msg":
+            kind = step["kind"]
+            value = step.get("value")
+            if kind == "choice":
+                # Первый доступный вариант; ни одного — не ошибка запуска, а
+                # вердикт «ни одно действие шага не подходит боту сейчас».
+                chosen = None
+                for opt in step["options"]:
+                    if _available(opt["kind"], opt["value"], known, last_buttons):
+                        chosen = opt
+                        break
+                if chosen is None:
+                    turns.append({{"kind": "no_button", "label": step["label"],
+                                   "known": sorted(set(known.values()))[:50]}})
+                    uid += 1
+                    continue
+                kind = chosen["kind"]
+                value = chosen["value"]
+            if kind == "msg":
                 # Определить актёра и чат для шага (ТЗ C3)
                 role = step.get("as")
                 actor_cfg = ACTORS.get(role) if role else None
@@ -226,8 +263,8 @@ async def main():
                 if chat_cfg:
                     from botkit_farm.scene import ChatConfig
                     chat = ChatConfig(id=scene.FAKE_CHAT_ID, type=chat_cfg.get("type", "private"), title=chat_cfg.get("title"), thread_id=chat_cfg.get("thread_id"), bot_username=chat_cfg.get("bot_username"))
-                update = scene.to_message(step["value"], uid, actor=actor, chat=chat)
-            elif step["kind"] == "pick":
+                update = scene.to_message(value, uid, actor=actor, chat=chat)
+            elif kind == "pick":
                 # Определить актёра и чат для шага (ТЗ C3)
                 role = step.get("as")
                 actor_cfg = ACTORS.get(role) if role else None
@@ -248,7 +285,7 @@ async def main():
                                    "known": []}})
                     uid += 1
                     continue
-                idx = step["value"]
+                idx = value
                 pos = 0 if idx == "first" else (
                     len(last_btns) - 1 if idx == "last" else int(idx))
                 if not 0 <= pos < len(last_btns):
@@ -258,7 +295,7 @@ async def main():
                     continue
                 update = scene.to_callback(last_btns[pos], uid)
             else:
-                data = step["value"]
+                data = value
                 # Определить актёра и чат для шага (ТЗ C3)
                 role = step.get("as")
                 actor_cfg = ACTORS.get(role) if role else None

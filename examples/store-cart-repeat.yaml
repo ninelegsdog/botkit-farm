@@ -1,0 +1,68 @@
+# Кейс написан по коду src/store/handlers.py.
+#   botkit-farm study ~/BOTKIT-FARM/bots/botkit-store
+#
+#   /start              → handlers.py:19  «🛍 Добро пожаловать в магазин!» + меню
+#   текст «🛍 Каталог»  → handlers.py:25  «Выберите категорию:» + store_cat:<id>
+#   store_cat:1         → handlers.py:45  карточка на КАЖДЫЙ товар категории
+#   store_cart:<id>     → handlers.py:66  «✅ Добавлено в корзину!» и qty += 1
+#   текст «🛒 Корзина»  → handlers.py:93  «🛒 Корзина:» со количеством
+#
+# Здесь проверяется ТЗ C6: `choice` берёт первое доступное действие (карточка
+# предлагает и «В корзину», и «Купить»), а `repeat` выполняет его дважды. Второй
+# раз — тот же товар, и add_to_cart (service.py:41) увеличивает количество до 2.
+# Без `repeat` этот путь пришлось бы писать двумя одинаковыми шагами.
+
+schema_version: 1
+id: store-cart-repeat
+title: Добавление товара в корзину дважды (choice + repeat)
+description: >-
+  Клиент открывает каталог, заходит в категорию и добавляет один и тот же товар
+  в корзину два раза. Проверяет ветвление `choice` (первое доступное действие)
+  и повтор `repeat`: корзина обязана показать количество 2.
+source: https://github.com/ninelegsdog/botkit-store
+builder: newgen
+fixture: store
+
+seed: true
+
+frame: window
+frame_title: StoreBot · магазин
+frame_handle: "@StoreKitBot"
+publishable: true
+
+tags: [regression, ui]
+covers: store-flow
+
+steps:
+  - send: "/start"
+    expect:
+      text_contains: ["Добро пожаловать в магазин"]
+
+  - send: "🛍 Каталог"
+    pause: 2.5
+    expect:
+      text_contains: ["Выберите категорию:"]
+      buttons_contains: ["Шаблоны", "Иконки"]
+
+  # Категория: бот присылает карточку на каждый товар (их два).
+  - pick: first
+    pause: 2.5
+    expect:
+      buttons_contains: ["🛒 В корзину"]
+
+  # Ветвление: карточка предлагает и «В корзину», и «Купить». Берём первое
+  # доступное — «🛒 В корзину» (она есть в known). Повтор дважды: тот же товар,
+  # qty становится 2.
+  - choice:
+      - click: "🛒 В корзину"
+      - click: "💳 Купить"
+    repeat: 2
+    pause: 2.5
+    expect:
+      text_contains: ["Добавлено в корзину"]
+
+  # Корзина: количество товара — 2, а не 1. Именно это доказывает повтор.
+  - send: "🛒 Корзина"
+    pause: 2.5
+    expect:
+      text_contains: ["Шаблон презентации x2"]

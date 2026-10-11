@@ -13,6 +13,7 @@ from typing import Any
 import pytest
 
 from botkit_farm.adapters.registry import resolve as _resolve
+from botkit_farm.case import template as tmpl
 from botkit_farm.case.model import Case, Expect
 from botkit_farm.runner import engine
 from botkit_farm.runner.contract import Media, parse_turns
@@ -887,3 +888,226 @@ def test_карантин_попадает_в_json_отчёта(tmp_path, monkey
     )
 
     assert result.to_dict()["quarantine"] == ["connect → 1.2.3.4:443"]
+
+
+# ── C6: repeat и choice ─────────────────────────────────────────────────────
+
+
+def test_plan_разворачивает_repeat_с_индексом():
+    case = _case({"send": "Товар {{ i }}", "repeat": 3, "expect": {"silent": True}})
+    plan = engine._plan(case)
+
+    assert [p.value for p in plan] == ["Товар 0", "Товар 1", "Товар 2"]
+    assert [p.index for p in plan] == [0, 1, 2]
+    assert [p.total for p in plan] == [3, 3, 3]
+    # Подпись маркируется повтором: иначе три одинаковые строки в отчёте слились бы.
+    assert plan[0].label == "написать «Товар 0» [1/3]"
+    assert plan[2].label == "написать «Товар 2» [3/3]"
+
+
+def test_to_steps_разворачивает_repeat_в_несколько_шагов():
+    case = _case({"send": "{{ i }}", "repeat": 2, "expect": {"silent": True}})
+    steps = engine._to_steps(engine._plan(case), 1.0)
+
+    assert [s["value"] for s in steps] == ["0", "1"]
+    assert all("gap" in s for s in steps)
+
+
+def test_choice_становится_одним_шагом_с_вариантами():
+    case = _case({"choice": [{"click": "Купить"}, {"pick": "last"}], "expect": {"silent": True}})
+    step = engine._to_steps(engine._plan(case), 1.0)[0]
+
+    assert step["kind"] == "choice"
+    assert step["options"] == [
+        {"kind": "cb", "value": "Купить"},
+        {"kind": "pick", "value": "last"},
+    ]
+    assert step["label"] == "выбрать доступное действие (нажать «Купить»)"
+
+
+def test_plan_рендерит_ветки_choice_индексом():
+    case = _case(
+        {
+            "choice": [{"send": "Шаг {{ i }}"}],
+            "repeat": 2,
+            "expect": {"silent": True},
+        }
+    )
+    plan = engine._plan(case)
+
+    assert [p.options[0]["value"] for p in plan] == ["Шаг 0", "Шаг 1"]
+
+
+def test_consume_рендерит_expect_по_прошлым_ответам():
+    case = _case(
+        {"send": "а", "expect": {"text_contains": ["Привет"]}},
+        {"send": "б", "expect": {"text_contains": ["{{ turns[-1] }}"]}},
+    )
+    res = _result()
+    turns = _turns(_turn("написать «а»", ["Привет"]), _turn("написать «б»", ["Привет"]))
+
+    assert engine._consume(turns, case, res) is Status.PASSED
+
+
+def test_consume_рендерит_expect_и_падает_на_несовпадении():
+    case = _case(
+        {"send": "а", "expect": {"text_contains": ["Привет"]}},
+        {"send": "б", "expect": {"text_contains": ["{{ turns[-1] }}"]}},
+    )
+    res = _result()
+    turns = _turns(_turn("написать «а»", ["Привет"]), _turn("написать «б»", ["Другое"]))
+
+    assert engine._consume(turns, case, res) is Status.FAILED
+
+
+def test_consume_сверяет_каждый_повтор_отдельно():
+    case = _case({"send": "{{ i }}", "repeat": 2, "expect": {"text_contains": ["{{ i }}"]}})
+    res = _result()
+    turns = _turns(
+        _turn("написать «0» [1/2]", ["0"]),
+        _turn("написать «1» [2/2]", ["1"]),
+    )
+
+    assert engine._consume(turns, case, res) is Status.PASSED
+    assert res.steps_done == 2
+
+
+def test_render_expect_рендерит_строки_всех_полей():
+    exp = Expect(
+        text_contains=["a{{ i }}"],
+        buttons_contains=["b{{ n }}"],
+        caption_contains=["c{{ turns[-1] }}"],
+    )
+    got = engine._render_expect(exp, {"i": 1, "n": 2, "turns": ["X"]}, "шаг")
+
+    assert got.text_contains == ["a1"]
+    assert got.buttons_contains == ["b2"]
+    assert got.caption_contains == ["cX"]
+    assert got.text_equals is None
+
+
+def test_render_expect_точный_текст():
+    exp = Expect(text_equals="{{ turns[0] }}")
+    got = engine._render_expect(exp, {"i": 0, "n": 1, "turns": ["Привет"]}, "шаг")
+
+    assert got.text_equals == "Привет"
+
+
+def test_steps_total_считает_повторы():
+    case = _case({"send": "{{ i }}", "repeat": 4, "expect": {"silent": True}})
+    assert engine._начальный_результат(case, __import__("pathlib").Path(".")).steps_total == 4
+
+
+def test_plan_подставляет_и_индекс_и_число_повторов():
+    # Обе переменные повтора должны доехать до действия: индекс и общее число.
+    case = _case({"send": "{{ i }}/{{ n }}", "repeat": 3, "expect": {"silent": True}})
+    assert [p.value for p in engine._plan(case)] == ["0/3", "1/3", "2/3"]
+
+
+def test_consume_подставляет_число_повторов_в_ожидание():
+    case = _case({"send": "{{ i }}", "repeat": 2, "expect": {"text_contains": ["из {{ n }}"]}})
+    res = _result()
+    turns = _turns(_turn("написать «0» [1/2]", ["из 2"]), _turn("написать «1» [2/2]", ["из 2"]))
+
+    assert engine._consume(turns, case, res) is Status.PASSED
+
+
+def test_plan_помечает_повтор_уже_с_двух():
+    case = _case({"send": "x", "repeat": 2, "expect": {"silent": True}})
+    plan = engine._plan(case)
+
+    assert plan[0].label == "написать «x» [1/2]"
+    assert plan[1].label == "написать «x» [2/2]"
+
+
+def test_подпись_обрезает_длинное_сообщение_до_40():
+    long = "х" * 41
+    case = _case({"send": long, "expect": {"silent": True}})
+    assert engine._plan(case)[0].label == f"написать «{'х' * 40}»"
+
+
+def test_plan_переносит_поля_шага_и_повтора():
+    case = _case(
+        {
+            "choice": [{"click": "Далее"}],
+            "as": "admin",
+            "pause": 3.0,
+            "optional": True,
+            "repeat": 2,
+            "expect": {"text_contains": ["ок"]},
+        }
+    )
+    plan = engine._plan(case)
+
+    assert len(plan) == 2
+    for j, p in enumerate(plan):
+        assert p.kind == "choice"
+        assert p.expect is not None
+        assert p.expect.text_contains == ["ок"]
+        assert p.as_ == "admin"
+        assert p.pause == 3.0
+        assert p.optional is True
+        assert p.index == j
+        assert p.total == 2
+
+
+def test_plan_переносит_поля_обычного_шага():
+    case = _case(
+        {
+            "send": "а",
+            "as": "admin",
+            "pause": 3.0,
+            "optional": True,
+            "expect": {"text_contains": ["ок"]},
+        }
+    )
+    p = engine._plan(case)[0]
+
+    assert p.expect is not None
+    assert p.as_ == "admin"
+    assert p.pause == 3.0
+    assert p.optional is True
+
+
+def test_plan_называет_место_ошибки_шаблона():
+    case = _case({"send": "{{ missing }}", "expect": {"silent": True}})
+    with pytest.raises(tmpl.TemplateError, match="test-case: шаг 1"):
+        engine._plan(case)
+
+
+def test_plan_называет_место_ошибки_в_ветке_choice():
+    case = _case({"choice": [{"send": "{{ missing }}"}], "expect": {"silent": True}})
+    with pytest.raises(tmpl.TemplateError, match="test-case: шаг 1"):
+        engine._plan(case)
+
+
+def test_render_expect_называет_место_ошибки_в_точном_тексте():
+    exp = Expect(text_equals="{{ missing }}")
+    with pytest.raises(tmpl.TemplateError, match="МЕСТО"):
+        engine._render_expect(exp, {"i": 0, "n": 1, "turns": []}, "МЕСТО")
+
+
+def test_render_expect_называет_место_ошибки_в_text_contains():
+    exp = Expect(text_contains=["{{ missing }}"])
+    with pytest.raises(tmpl.TemplateError, match="МЕСТО"):
+        engine._render_expect(exp, {"i": 0, "n": 1, "turns": []}, "МЕСТО")
+
+
+def test_render_expect_называет_место_ошибки_в_buttons_contains():
+    exp = Expect(buttons_contains=["{{ missing }}"])
+    with pytest.raises(tmpl.TemplateError, match="МЕСТО"):
+        engine._render_expect(exp, {"i": 0, "n": 1, "turns": []}, "МЕСТО")
+
+
+def test_render_expect_называет_место_ошибки_в_caption_contains():
+    exp = Expect(caption_contains=["{{ missing }}"])
+    with pytest.raises(tmpl.TemplateError, match="МЕСТО"):
+        engine._render_expect(exp, {"i": 0, "n": 1, "turns": []}, "МЕСТО")
+
+
+def test_consume_называет_место_ошибки_шаблона_ожидания():
+    case = _case({"send": "а", "expect": {"text_contains": ["{{ missing }}"]}})
+    res = _result()
+    turns = _turns(_turn("написать «а»", ["ок"]))
+    with pytest.raises(tmpl.TemplateError, match="написать «а»"):
+        engine._consume(turns, case, res)

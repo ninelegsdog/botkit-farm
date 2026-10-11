@@ -12,6 +12,11 @@
       "why": "покрытие: store-flow — каталог и корзина (botkit-store)"
     },
     {
+      "id": "store-cart-repeat",
+      "case": "store-cart-repeat.yaml",
+      "why": "покрытие: ТЗ C6 — choice (первое доступное действие) и repeat: товар добавлен дважды, корзина показывает x2 (botkit-store)"
+    },
+    {
       "id": "delivery-order-status",
       "case": "delivery-order-status.yaml",
       "why": "покрытие: delivery-flow — поиск заказа и автомат статусов (botkit-delivery)"

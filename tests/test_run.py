@@ -110,7 +110,7 @@ def test_каталог_исходников_это_родитель_родит�
     assert engine._farm_src() == pathlib.Path(engine.__file__).resolve().parents[2]
 
 
-# ── _to_steps: кейс → протокол хоста ─────────────────────────────────────────
+# ── _to_steps: план → протокол хоста ─────────────────────────────────────────
 
 
 def test_сообщение_даёт_вид_msg() -> None:
@@ -123,7 +123,7 @@ def test_сообщение_даёт_вид_msg() -> None:
         }
     )
 
-    assert engine._to_steps(case, 2.5) == [
+    assert engine._to_steps(engine._plan(case), 2.5) == [
         {"kind": "msg", "value": "/start", "label": "написать «/start»", "gap": 2.5}
     ]
 
@@ -138,7 +138,7 @@ def test_нажатие_даёт_вид_cb_и_подпись_из_кнопки()
         }
     )
 
-    assert engine._to_steps(case, 2.5) == [
+    assert engine._to_steps(engine._plan(case), 2.5) == [
         {"kind": "cb", "value": "Купить", "label": "нажать «Купить»", "gap": 2.5}
     ]
 
@@ -153,7 +153,7 @@ def test_выбор_из_списка_даёт_вид_pick() -> None:
         }
     )
 
-    assert engine._to_steps(case, 0.0) == [
+    assert engine._to_steps(engine._plan(case), 0.0) == [
         {"kind": "pick", "value": "first", "label": "нажать кнопку first", "gap": 0.0}
     ]
 
@@ -169,7 +169,7 @@ def test_заметка_шага_не_подменяет_его_подпись()
         }
     )
 
-    assert engine._to_steps(case, 1.0)[0]["label"] == "написать «Привет»"
+    assert engine._to_steps(engine._plan(case), 1.0)[0]["label"] == "написать «Привет»"
 
 
 def test_пауза_шага_заменяет_общий_интервал() -> None:
@@ -184,7 +184,7 @@ def test_пауза_шага_заменяет_общий_интервал() -> N
             ],
         }
     )
-    steps = engine._to_steps(case, 2.5)
+    steps = engine._to_steps(engine._plan(case), 2.5)
 
     assert steps[0] == {"kind": "msg", "value": "/start", "label": "написать «/start»", "gap": 2.5}
     assert steps[1] == {
@@ -206,7 +206,7 @@ def test_пауза_ноль_это_ещё_пауза() -> None:
         }
     )
 
-    assert "pause" in engine._to_steps(case, 2.5)[0]
+    assert "pause" in engine._to_steps(engine._plan(case), 2.5)[0]
 
 
 def test_все_шаги_кейса_доходят_до_хоста() -> None:
@@ -222,7 +222,7 @@ def test_все_шаги_кейса_доходят_до_хоста() -> None:
             ],
         }
     )
-    steps = engine._to_steps(case, 1.0)
+    steps = engine._to_steps(engine._plan(case), 1.0)
 
     assert [s["kind"] for s in steps] == ["msg", "cb", "pick"]
 

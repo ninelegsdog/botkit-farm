@@ -14,8 +14,9 @@ from typing import Any, Literal
 import yaml
 from pydantic import ValidationError
 
+from botkit_farm.case import template as tmpl
 from botkit_farm.case.migration import SchemaError, apply_migrations
-from botkit_farm.case.model import Case, find_placeholders, find_slots
+from botkit_farm.case.model import Case, find_placeholders
 
 # Каталог пака → происхождение кейса. Словарь даёт и проверку входа, и
 # типизированное значение: `path.parent.name` — обычная строка, а поле `origin`
@@ -78,17 +79,57 @@ def load_file(path: pathlib.Path) -> Case:
     if case.origin is None and origin is not None:
         case.origin = origin
 
-    # Слоты и заглушки ловим здесь, до запуска бота: незаполненный кейс обязан
+    # Шаблоны и заглушки ловим здесь, до запуска бота: недопустимый кейс обязан
     # падать на чтении, иначе он снесёт состояние (базу, FSM) и лишь затем
-    # покажет, что проверять нечего.
+    # покажет, что проверять нечего. Неизвестная переменная шаблона — отказ с
+    # её именем (ТЗ C6), а не пустая строка в отчёте.
+    _check_templates(case, path)
     body = path.read_text(encoding="utf-8")
-    slots = find_slots(body)
-    if slots:
-        raise CaseError(f"{path}: незаполненные слоты {sorted(set(slots))}")
     stubs = find_placeholders(body)
     if stubs:
         raise CaseError(f"{path}: найдены слова-заглушки {sorted(set(stubs))} — кейс не дописан")
     return case
+
+
+def _check_templates(case: Case, path: pathlib.Path) -> None:
+    """Проверить все шаблонные строки кейса до запуска бота.
+
+    Действия видят только индекс повтора (`i`, `n`); ожидания — ещё и прошлые
+    ответы (`turns`). Разные наборы переменных не случайны: `send` рендерится до
+    прогона, когда ответов ещё нет, а `expect` — после, когда они есть.
+    """
+    for n, step in enumerate(case.steps, start=1):
+        for field, text in (("send", step.send), ("click", step.click), ("pick", step.pick)):
+            if text is not None:
+                _check_one(text, tmpl.ACTION_VARS, f"{path}: шаг {n} {field}")
+        for j, branch in enumerate(step.choice or [], start=1):
+            for field, text in (
+                ("send", branch.send),
+                ("click", branch.click),
+                ("pick", branch.pick),
+            ):
+                if text is not None:
+                    _check_one(text, tmpl.ACTION_VARS, f"{path}: шаг {n} choice {j} {field}")
+        exp = step.expect
+        if exp is None:
+            continue
+        for field, value in (("text_equals", exp.text_equals),):
+            if value is not None:
+                _check_one(value, tmpl.EXPECT_VARS, f"{path}: шаг {n} expect.{field}")
+        for field, values in (
+            ("text_contains", exp.text_contains),
+            ("buttons_contains", exp.buttons_contains),
+            ("caption_contains", exp.caption_contains),
+        ):
+            for j, value in enumerate(values, start=1):
+                _check_one(value, tmpl.EXPECT_VARS, f"{path}: шаг {n} expect.{field}[{j}]")
+
+
+def _check_one(text: str, allowed: frozenset[str], where: str) -> None:
+    try:
+        tmpl.check(text, allowed, where)
+    except tmpl.TemplateError as exc:
+        raise CaseError(str(exc)) from exc
 
 
 def load_dir(root: pathlib.Path) -> tuple[list[Case], list[str]]:
