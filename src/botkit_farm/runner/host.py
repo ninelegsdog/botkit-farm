@@ -22,11 +22,11 @@ import os
 import pathlib
 import subprocess
 import tempfile
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from pydantic import ValidationError
 
-from botkit_farm import security
+from botkit_farm import sandbox, security
 from botkit_farm.runner.contract import HostTurn, parse_turns
 
 # Скрипт-хост: поднимает бота, кормит его Update'ами и печатает результат в JSON.
@@ -37,13 +37,20 @@ import asyncio, json, os, sys
 # после chdir в пути бота они могут перекрыться его собственным пакетом src.
 sys.path.insert(0, {farm_src!r})
 
-from botkit_farm import fake_api, scene, stand
+from botkit_farm import fake_api, quarantine, scene, stand
 
 ADAPTER = 'botkit_farm.adapters.' + {adapter!r}
 BOT_DIR = {bot_dir!r}
 PORT = {port!r}
 RESULT = {result!r}
 DB_PATH = {db_path!r}
+VIOLATIONS = {violations!r}
+
+# Карантин ставится ДО импорта кода бота: пока модуль не импортирован, он не
+# успел ничего написать. Запрет egress в ферме сюда не дотягивается — подпроцесс
+# запускается чистым интерпретатором, и без этого запрета бот был бы единственным
+# участником прогона, которому сеть разрешена.
+GUARD = quarantine.arm(BOT_DIR, __import__("pathlib").Path(DB_PATH).parent, __import__("pathlib").Path(VIOLATIONS).parent)
 
 # Окружение бота ставим здесь, в его процессе, а не в ферме: конфиг бота
 # (pydantic Settings) читает переменные в момент импорта своего модуля, и если
@@ -176,6 +183,11 @@ async def main():
             except Exception:
                 pass
         await runner.cleanup()
+        # Нарушения пишутся последними и с карантином, снятым: иначе отчёт сам
+        # оказался бы запрещённой записью, а падение на этом — потеря причины.
+        GUARD.disarm()
+        with open(VIOLATIONS, "w", encoding="utf-8") as fh:
+            json.dump(GUARD.summary(), fh, ensure_ascii=False)
 
 
 asyncio.run(main())
@@ -188,10 +200,14 @@ class ExecResult:
 
     `turns` типизированы контрактом: разбор JSON — это и есть проверка границы
     хост↔движок, и он делается один раз здесь, а не размазывается по движку.
+
+    `violations` — чем карантин остановил бота. Пустой список не «всё хорошо»:
+    бот мог упасть раньше, чем что-либо попытался сделать.
     """
 
     turns: list[HostTurn]
     error: str = ""
+    violations: list[str] = field(default_factory=list)
 
 
 def _contract_error(exc: ValidationError) -> str:
@@ -213,16 +229,24 @@ def run_bot(
     db_path: pathlib.Path,
     redis_url: str = "redis://127.0.0.1:6380/0",
     timeout: int = 300,
+    env_root: pathlib.Path | None = None,
 ) -> ExecResult:
     """Запустить бота в его окружении и вернуть транскрипцию.
 
     Сеть на время запуска закрыта: бот ходит только на фейковый API и Redis,
     оба на loopback.
+
+    При `BOTKIT_FARM_SANDBOX=1` процесс дополнительно оборачивается в
+    bubblewrap: в namespace попадают только каталоги прогона, поэтому код бота
+    физически не увидит ни `$HOME`, ни чужих репозиториев.
     """
     with tempfile.TemporaryDirectory(prefix="farm-exec-") as tmp:
         tmpdir = pathlib.Path(tmp)
         steps_file = tmpdir / "steps.json"
         result_file = tmpdir / "result.json"
+        # Каталог прогона — корень карантина: хост пишет сюда свои файлы, и
+        # делать это он должен иметь право.
+        violations_file = tmpdir / "violations.json"
         steps_file.write_text(json.dumps(steps, ensure_ascii=False), encoding="utf-8")
 
         host = _HOST.format(
@@ -235,6 +259,7 @@ def run_bot(
             fixture=str(fixture) if fixture else "",
             steps_file=str(steps_file),
             result=str(result_file),
+            violations=str(violations_file),
         )
         host_file = tmpdir / "host.py"
         host_file.write_text(host, encoding="utf-8")
@@ -242,10 +267,19 @@ def run_bot(
         env = {**os.environ, "PYTHONPATH": str(farm_src)}
         env.pop("TELEGRAM_BOT_TOKEN", None)  # токен ставит стенд, не наследуем
 
+        # Под песочницей видны только каталоги прогона: код бота, его venv, база,
+        # протокол хоста и исходники фермы (из них хост импортирует подделку API).
+        binds = [bot_dir, db_path.parent, tmpdir, farm_src]
+        if env_root is not None:
+            binds.append(env_root)
+        cmd = sandbox.wrap_or_passthrough(
+            [str(bot_python), str(host_file)], binds=binds, chdir=bot_dir
+        )
+
         security.block_egress()
         try:
             proc = subprocess.run(  # noqa: S603 — интерпретатор и скрипт свои
-                [str(bot_python), str(host_file)],
+                cmd,
                 capture_output=True,
                 text=True,
                 timeout=timeout,
@@ -261,17 +295,34 @@ def run_bot(
         finally:
             security.allow_egress()
 
+        violations = _read_violations(violations_file)
+
         if not result_file.exists():
             err = (proc.stderr or proc.stdout or "").strip().splitlines()
             tail = "\n".join(err[-12:]) if err else "(пустой вывод)"
-            return ExecResult(turns=[], error=f"бот не отработал:\n{tail}")
+            return ExecResult(turns=[], error=f"бот не отработал:\n{tail}", violations=violations)
 
         raw = json.loads(result_file.read_text(encoding="utf-8"))
         try:
             turns = parse_turns(raw)
         except ValidationError as exc:
-            return ExecResult(turns=[], error=_contract_error(exc))
-        return ExecResult(turns=turns)
+            return ExecResult(turns=[], error=_contract_error(exc), violations=violations)
+        return ExecResult(turns=turns, violations=violations)
+
+
+def _read_violations(path: pathlib.Path) -> list[str]:
+    """Что карантин запретил за прогон; пустой список, если ничего не запретил.
+
+    Файл может не появиться: бот упал раньше, чем карантин успел что-то
+    записать, — и это не ошибка чтения, а отсутствие события.
+    """
+    if not path.exists():
+        return []
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    return [str(item) for item in data] if isinstance(data, list) else []
 
 
 __all__ = ["ExecResult", "run_bot"]

@@ -21,14 +21,12 @@
 from __future__ import annotations
 
 import os
-import shutil
-import subprocess
 from collections.abc import Callable
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 
-from botkit_farm import security
+from botkit_farm import sandbox, security
 
 # Порт по умолчанию — тот же, что и в cli.REDIS_URL: отдельный от системного
 # 6379, чтобы стенд не мешал локальному Redis разработчика.
@@ -297,14 +295,22 @@ def _frame_assets(root: Path) -> list[str]:
 # ── 5. Изоляция ─────────────────────────────────────────────────────────────
 
 
-def check_isolation(probe: Callable[[], str | None] | None = None) -> Check:
-    """Доступен ли песочник исполнения чужого кода.
+def check_isolation(
+    probe: Callable[[], str | None] | None = None,
+    is_enabled: Callable[[], bool] | None = None,
+) -> Check:
+    """Доступен ли песочник и включён ли он сейчас.
 
     Ферма обещает «любого бота», а бот исполняется с правами владельца. Если
-    песочника нет, обещание держится только на честном слове — об этом нужно
-    сказать прямо, а не промолчать.
+    песочника нет или он выключен, обещание держится только на запрете egress и
+    карантине — об этом нужно сказать прямо, а не промолчать.
+
+    Различаются три состояния, а не два: «есть и включён» (всё в порядке), «есть,
+    но выключен» (владелец решил так сознательно — это не поломка, но и не
+    изоляция) и «нет» (сделать нечего без установки пакета).
     """
-    backend = (probe or detect_isolation)()
+    backend = probe() if probe is not None else sandbox.available_backend()
+    on = (is_enabled if is_enabled is not None else sandbox.enabled)()
     if backend is None:
         return Check(
             name="isolation",
@@ -313,87 +319,33 @@ def check_isolation(probe: Callable[[], str | None] | None = None) -> Check:
             what="песочник исполнения недоступен — код бота идёт с вашими правами",
             why=(
                 "чужой бот сможет писать куда угодно от вашего имени, и это "
-                "главный риск фермы; сейчас его прикрывает только запрет egress."
+                "главный риск фермы; сейчас его прикрывают карантин и запрет egress."
             ),
-            fix="apt install bubblewrap  # затем прогоны идут под песочницей",
+            fix=(
+                "apt install bubblewrap  # затем BOTKIT_FARM_SANDBOX=1 включит "
+                "песочницу для прогонов"
+            ),
+        )
+    if not on:
+        return Check(
+            name="isolation",
+            ok=False,
+            level=Level.DEGRADED,
+            what=f"песочник доступен через {backend}, но выключен",
+            why=(
+                "прогон пойдёт, но код бота будет видеть вашу файловую систему: "
+                "локально это осознанный выбор ради отладки, в CI — дыра."
+            ),
+            fix="BOTKIT_FARM_SANDBOX=1 botkit-farm run  # включить песочницу",
         )
     return Check(
         name="isolation",
         ok=True,
         level=Level.DEGRADED,
-        what=f"песошник доступен через {backend}",
-        why="код бота исполняется изолированно от вашей файловой системы.",
+        what=f"песочница включена через {backend}",
+        why="код бота исполняется в namespace, где нет ни $HOME, ни чужих репозиториев.",
         fix="",
     )
-
-
-def detect_isolation() -> str | None:
-    """Имя первого доступного песочника или None.
-
-    Порядок — от дешёвого к дорогому: bubblewrap стоит в каждом дистрибутиве
-    и поднимается за миллисекунды, Docker/Podman тяжелее, но дают полноценную
-    изоляцию и сетевые правила.
-    """
-    for backend, probe in (
-        ("bubblewrap", "bwrap"),
-        ("unshare", "unshare"),
-        ("podman", "podman"),
-        ("docker", "docker"),
-    ):
-        path = shutil.which(probe)
-        if path is None:
-            continue
-        if backend == "unshare" and not _unshare_works():
-            continue
-        if backend in ("podman", "docker") and not _container_works(backend):
-            continue
-        return backend
-    return None
-
-
-def _abs(name: str) -> str:
-    """Полный путь к бинарнику.
-
-    subprocess ищет программу по PATH, а doctor — не то место, где стоит
-    подставлять путь из чужой переменной окружения: ищем сами через shutil.
-    """
-    found = shutil.which(name)
-    return found if found else name
-
-
-def _unshare_works() -> bool:
-    """Есть ли unshare, который действительно создаёт namespace.
-
-    Бинарник в системе может быть, а user namespaces — выключены в ядре. Тогда
-    подсказка «изоляция доступна» была бы враньём, поэтому проверяем запуск,
-    а не наличие файла.
-    """
-    try:
-        # Команда и аргументы тут — константы модуля, путь найден сам.
-        done = subprocess.run(  # noqa: S603
-            [_abs("unshare"), "--user", "--map-root-user", "true"],
-            capture_output=True,
-            timeout=5,
-            check=False,
-        )
-    except (OSError, subprocess.SubprocessError):
-        return False
-    return done.returncode == 0
-
-
-def _container_works(backend: str) -> bool:
-    """Есть ли рабочий демон: бинарник без запущенного dockerd не изоляция."""
-    try:
-        # Список backend'ов — константа модуля, путь найден сам.
-        done = subprocess.run(  # noqa: S603
-            [_abs(backend), "info"],
-            capture_output=True,
-            timeout=10,
-            check=False,
-        )
-    except (OSError, subprocess.SubprocessError):
-        return False
-    return done.returncode == 0
 
 
 # ── 6. Кейсы ────────────────────────────────────────────────────────────────
@@ -563,7 +515,6 @@ __all__ = [
     "check_frame_support",
     "check_isolation",
     "check_token",
-    "detect_isolation",
     "format_report",
     "redis_command",
     "run_checks",

@@ -52,6 +52,18 @@ def render_markdown(result: CaseResult) -> str:
         lines.append("```")
         lines.append("")
 
+    if result.quarantine:
+        lines.append("## Карантин: бот делал то, что ферма запрещает")
+        lines.append("")
+        lines.append(
+            "Бот исполняется с правами владельца. Эти попытки остановлены, но "
+            "сама попытка — повод посмотреть, зачем боту это нужно."
+        )
+        lines.append("")
+        for v in result.quarantine:
+            lines.append(f"- `{v}`")
+        lines.append("")
+
     if result.failures:
         lines.append("## Что не совпало")
         lines.append("")

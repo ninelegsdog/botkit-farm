@@ -281,6 +281,10 @@ async def _run_one(case_path: pathlib.Path, ref: str | None) -> CaseResult | Non
             print(f"      ✗ {f.summary()}: ожидали {f.expected!r}, получили {f.actual[:60]!r}")
         if result.error:
             print(f"      💥 {result.error.strip().splitlines()[0][:160]}")
+        for v in result.quarantine[:3]:
+            print(f"      🔒 карантин: {v[:140]}")
+        if len(result.quarantine) > 3:
+            print(f"      🔒 карантин: ещё {len(result.quarantine) - 3} в отчёте")
         print(f"  отчёт: {report.name}")
         if result.frame_path:
             print(f"  кадр:  {result.frame_path}")

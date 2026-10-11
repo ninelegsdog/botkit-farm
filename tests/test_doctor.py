@@ -215,37 +215,24 @@ def test_без_песочника_доктор_говорит_прямо() -> N
     assert check.level is Level.DEGRADED
     assert "с вашими правами" in check.what
     assert "bubblewrap" in check.fix
+    assert "BOTKIT_FARM_SANDBOX" in check.fix
 
 
-def test_песочник_найден_и_это_не_ухудшение_для_вердикта() -> None:
-    check = doctor.check_isolation(probe=lambda: "bubblewrap")
+def test_выключенный_песочник_это_не_то_же_что_отсутствующий() -> None:
+    """Три состояния, а не два: нет / есть, но выключен / есть и включён."""
+    check = doctor.check_isolation(probe=lambda: "bubblewrap", is_enabled=lambda: False)
+
+    assert check.ok is False
+    assert "но выключен" in check.what
+    assert check.fix == "BOTKIT_FARM_SANDBOX=1 botkit-farm run  # включить песочницу"
+
+
+def test_включённый_песочник_идёт_как_прошлое_но_остаётся_ухудшением() -> None:
+    check = doctor.check_isolation(probe=lambda: "bubblewrap", is_enabled=lambda: True)
 
     assert check.ok is True
     assert check.level is Level.DEGRADED
-    assert "bubblewrap" in check.what
-
-
-def test_песочники_выбираются_от_дешёвого_к_дорогому(monkeypatch) -> None:
-    which = {"bwrap": "/usr/bin/bwrap", "unshare": "/usr/bin/unshare", "podman": "/usr/bin/podman"}
-    monkeypatch.setattr("botkit_farm.doctor.shutil.which", lambda n: which.get(n))
-
-    assert doctor.detect_isolation() == "bubblewrap"
-
-
-def test_unshare_без_namespace_считается_недоступным(monkeypatch) -> None:
-    which = {"unshare": "/usr/bin/unshare"}
-    monkeypatch.setattr("botkit_farm.doctor.shutil.which", lambda n: which.get(n))
-    monkeypatch.setattr("botkit_farm.doctor._unshare_works", lambda: False)
-
-    assert doctor.detect_isolation() is None
-
-
-def test_контейнер_с_незапущенным_демоном_не_считается_изоляцией(monkeypatch) -> None:
-    which = {"docker": "/usr/bin/docker"}
-    monkeypatch.setattr("botkit_farm.doctor.shutil.which", lambda n: which.get(n))
-    monkeypatch.setattr("botkit_farm.doctor._container_works", lambda backend: False)
-
-    assert doctor.detect_isolation() is None
+    assert "включена через bubblewrap" in check.what
 
 
 # ── Кадры ───────────────────────────────────────────────────────────────────

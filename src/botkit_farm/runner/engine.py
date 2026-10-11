@@ -199,13 +199,7 @@ def run_case(
     # Абсолютный путь обязателен: бот делает os.chdir(bot_dir) при сборке, и любой
     # относительный путь после этого указывает уже в другую директорию.
     bot_dir = bot_dir.resolve()
-    result = CaseResult(
-        case_id=case.id,
-        title=case.title,
-        status=Status.ERRORED,
-        steps_total=len(case.steps),
-        repo=str(bot_dir),
-    )
+    result = _начальный_результат(case, bot_dir)
     try:
         result.commit = _git_commit(bot_dir)
         security.assert_fake_token()
@@ -238,7 +232,11 @@ def run_case(
             fixture=fixture,
             steps=steps,
             db_path=db_path,
+            # Каталог с venv бота: он лежит рядом с репозиторием, а не внутри
+            # него, и без него песочница не увидит интерпретатор.
+            env_root=cache_dir,
         )
+        result.quarantine = list(execr.violations)
         if execr.error:
             result.error = execr.error
             result.status = Status.ERRORED
@@ -346,6 +344,23 @@ def _consume(turns: list[HostTurn], case: Case, result: CaseResult) -> Status:
                     return Status.FAILED
         idx += 1
     return status
+
+
+def _начальный_результат(case: Case, bot_dir: pathlib.Path) -> CaseResult:
+    """Результат до того, как прогон начался.
+
+    Статус здесь — `errored`, а не `passed`: прогон, который не дошёл до конца,
+    не должен выглядеть удачным ни в одном промежуточном состоянии. Пока
+    `_consume` не вынес вердикт, отчёт по такому результату честно говорит:
+    «не проверено».
+    """
+    return CaseResult(
+        case_id=case.id,
+        title=case.title,
+        status=Status.ERRORED,
+        steps_total=len(case.steps),
+        repo=str(bot_dir),
+    )
 
 
 def _farm_src() -> pathlib.Path:

@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -777,3 +778,93 @@ def test_обязательный_шаг_с_ожиданием_фиксируе�
     assert engine._consume(turns, case, res) is Status.FAILED
     assert res.failures[0].step_index == 0
     assert res.failures[0].step_label == "написать «а»"
+
+
+# ── карантин: нарушения доходят до результата кейса ────────────────────────
+
+
+def _готовая_среда(tmp_path, monkeypatch, execr):
+    """Подменить всё, до чего прогон не дойдёт без настоящего бота."""
+    monkeypatch.setattr(engine.security, "assert_fake_token", lambda: None)
+    monkeypatch.setattr(engine, "_adapter_for", lambda case, bot_dir: "newgen")
+    monkeypatch.setattr(
+        engine.envmod,
+        "ensure_env",
+        lambda bot_dir, cache: SimpleNamespace(python=tmp_path / ".venv" / "bin" / "python"),
+    )
+    monkeypatch.setattr(engine, "run_bot", lambda **kw: execr)
+
+
+def test_нарушения_карантина_доходят_до_результата(tmp_path, monkeypatch):
+    from botkit_farm.runner.host import ExecResult
+
+    case = _case({"send": "/start", "expect": {"silent": True}})
+    _готовая_среда(
+        tmp_path, monkeypatch, ExecResult(turns=[], violations=["open → /home/algtro/.ssh/x"])
+    )
+
+    result = engine.run_case(
+        case,
+        bot_dir=tmp_path / "bot",
+        cache_dir=tmp_path / "envs",
+        work_dir=tmp_path / ".work",
+    )
+
+    assert result.quarantine == ["open → /home/algtro/.ssh/x"]
+
+
+def test_без_нарушений_поле_карантина_пустое(tmp_path, monkeypatch):
+    from botkit_farm.runner.host import ExecResult
+
+    case = _case({"send": "/start", "expect": {"silent": True}})
+    _готовая_среда(tmp_path, monkeypatch, ExecResult(turns=[]))
+
+    result = engine.run_case(
+        case,
+        bot_dir=tmp_path / "bot",
+        cache_dir=tmp_path / "envs",
+        work_dir=tmp_path / ".work",
+    )
+
+    assert result.quarantine == []
+
+
+def test_ошибка_запуска_не_теряет_нарушения(tmp_path, monkeypatch):
+    """Бот упал на запрещённой записи: и причина, и попытка нужны обе."""
+    from botkit_farm.runner.host import ExecResult
+
+    case = _case({"send": "/start", "expect": {"silent": True}})
+    _готовая_среда(
+        tmp_path,
+        monkeypatch,
+        ExecResult(turns=[], error="бот не отработал", violations=["open → /etc/passwd"]),
+    )
+
+    result = engine.run_case(
+        case,
+        bot_dir=tmp_path / "bot",
+        cache_dir=tmp_path / "envs",
+        work_dir=tmp_path / ".work",
+    )
+
+    assert result.status is Status.ERRORED
+    assert result.error == "бот не отработал"
+    assert result.quarantine == ["open → /etc/passwd"]
+
+
+def test_карантин_попадает_в_json_отчёта(tmp_path, monkeypatch):
+    from botkit_farm.runner.host import ExecResult
+
+    case = _case({"send": "/start", "expect": {"silent": True}})
+    _готовая_среда(
+        tmp_path, monkeypatch, ExecResult(turns=[], violations=["connect → 1.2.3.4:443"])
+    )
+
+    result = engine.run_case(
+        case,
+        bot_dir=tmp_path / "bot",
+        cache_dir=tmp_path / "envs",
+        work_dir=tmp_path / ".work",
+    )
+
+    assert result.to_dict()["quarantine"] == ["connect → 1.2.3.4:443"]

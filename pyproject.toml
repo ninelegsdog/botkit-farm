@@ -149,6 +149,7 @@ pytest_add_cli_args_test_selection = [
   "tests/test_pack.py",
   "tests/test_report.py",
   "tests/test_inspect.py",
+  "tests/test_run.py",
 ]
 
 [tool.bandit]
