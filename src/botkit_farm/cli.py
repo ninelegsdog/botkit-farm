@@ -24,6 +24,7 @@ from typing import Any
 from botkit_farm import security
 from botkit_farm.case import load_dir, load_file
 from botkit_farm.inspector.repo import inspect_repo, render_report
+from botkit_farm.report.junit import write_junit
 from botkit_farm.report.markdown import write_json, write_report, write_summary
 from botkit_farm.runner.engine import run_case
 from botkit_farm.runner.result import CaseResult, Status
@@ -393,6 +394,9 @@ async def _run(args: argparse.Namespace) -> int:
 
     summary = write_summary(results, REPORTS_DIR)
     write_json(results, REPORTS_DIR / "_results.json")
+    if args.junit:
+        junit = write_junit(results, pathlib.Path(args.junit))
+        print(f"JUnit XML: {junit}")
     failed = [r for r in results if r.status is not Status.PASSED]
     print(
         f"\nИтог за {time.monotonic() - started:.0f} с: "
@@ -436,6 +440,11 @@ def main(argv: list[str] | None = None) -> int:
     p_run.add_argument("--tag", help="только кейсы с этим тегом")
     p_run.add_argument("--ref", help="ветка/тег для клонирования")
     p_run.add_argument("--pack", help="каталог пака или репозиторий бота с .botkit-farm")
+    p_run.add_argument(
+        "--junit",
+        metavar="ПУТЬ",
+        help="куда записать отчёт JUnit XML (для CI: кейсы видны как тесты)",
+    )
     p_run.set_defaults(fn=_run)
 
     p_migrate = sub.add_parser("migrate", help="привести кейсы к текущей версии схемы")
