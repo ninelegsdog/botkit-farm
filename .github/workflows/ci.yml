@@ -20,7 +20,11 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Линтеры и прочие гейты — один раз, на одной версии Python: они проверяют
+  # исходники, а не поведение на интерпретаторе. Держать их в матрице означало
+  # бы шесть одинаковых прогонов ради шести одинаковых результатов.
   check:
+    name: Линтеры и гейты
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -29,6 +33,10 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
+          # Зависимости объявлены в pyproject.toml, а requirements.txt в проекте
+          # нет. Без этого пути setup-python ищет `**/requirements.txt`, не
+          # находит его и роняет шаг — кэш должен уметь, а не мешать.
+          cache-dependency-path: pyproject.toml
 
       - name: Установить зависимости
         run: |
@@ -44,14 +52,6 @@ jobs:
       - name: Типы (mypy strict)
         run: mypy src/botkit_farm
 
-      - name: Тесты
-        # Playwright нужен рендер-тестам; сами боты и Redis не нужны: полные
-        # прогоны помечены @pytest.mark.slow и требуют клона репозитория.
-        run: |
-          pip install pytest-playwright
-          python -m playwright install --with-deps chromium
-          pytest -m "not slow"
-
       - name: Схема кейсов актуальна
         # Схема — публичный контракт с чужими репозиториями. Если кейс отстал от
         # фермы, это должно ловиться на PR, а не на чужом прогоне. --check ничего
@@ -66,16 +66,6 @@ jobs:
         # или появился вне каталога — это падение здесь, а не молчание.
         run: botkit-farm catalog --check examples
 
-      - name: Песочница исполнения доступна
-        # Переменная BOTKIT_FARM_SANDBOX=1 поднимается выше по файлу, и прогон
-        # бота без bubblewrap упал бы с SecurityError. Лучше упасть здесь, на
-        # понятном «install», чем внутри теста с сообщением про bwrap.
-        run: |
-          sudo apt-get update -qq && sudo apt-get install -y bubblewrap
-          # doctor печатает состояние песочницы; `|| true` — потому что его код
-          # возврата говорит о блокерах стенда (Redis, кейсы), а не о песочнице.
-          botkit-farm doctor || true
-
       - name: Связность базы знаний
         # Битая wikilink хуже отсутствующей заметки: читатель идёт по ней и не
         # находит ничего. Проверка живёт рядом с базой и запускается на каждый PR.
@@ -88,3 +78,61 @@ jobs:
         uses: gitleaks/gitleaks-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Песочница исполнения доступна
+        # Переменная BOTKIT_FARM_SANDBOX=1 поднимается выше по файлу, и прогон
+        # бота без bubblewrap упал бы с SecurityError. Лучше упасть здесь, на
+        # понятном «install», чем внутри теста с сообщением про bwrap.
+        # Шаг только для Linux: bubblewrap ставится из репозитория дистрибутива,
+        # и на macOS его нет (см. ниже, чем это кончается).
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y bubblewrap
+          # doctor печатает состояние песочницы; `|| true` — потому что его код
+          # возврата говорит о блокерах стенда (Redis, кейсы), а не о песочнице.
+          botkit-farm doctor || true
+
+  # Тесты — на матрице (ТЗ D2). Причина именно матрицы, а не «просто CI»: ферма
+  # держит вендорные пины (aiogram 3.x, playwright 1.x), а такие связки чаще
+  # всего ломаются не логикой фермы, а версией интерпретатора — и узнать об
+  # этом на чужом Python пользователь должен от нас, а не от себя.
+  tests:
+    name: Тесты · ${{ matrix.os }} · Python ${{ matrix.python }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      # Один упавший Python не должен гасить остальные: иначе сигнал «сломан
+      # 3.13» тонет в «упала вся сборка».
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        # Строки, а не числа: YAML превратил бы 3.10 в 3.1, и setup-python
+        # получил бы не тот интерпретатор.
+        python: ["3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+          # Тот же файл, что и в job'е check: requirements.txt в проекте нет.
+          cache-dependency-path: pyproject.toml
+
+      - name: Установить зависимости
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Браузер для рендер-тестов
+        # Playwright нужен рендер-тестам; сами боты и Redis не нужны: полные
+        # прогоны помечены @pytest.mark.slow и требуют клона репозитория.
+        # --with-deps ставит системные библиотеки и имеет смысл только на Linux.
+        run: |
+          pip install pytest-playwright
+          if [ "$RUNNER_OS" = "Linux" ]; then
+            python -m playwright install --with-deps chromium
+          else
+            python -m playwright install chromium
+          fi
+
+      - name: Тесты
+        run: pytest -m "not slow"
