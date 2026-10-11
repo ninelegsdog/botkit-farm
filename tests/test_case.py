@@ -134,6 +134,64 @@ def test_неизвестный_тег_отвергается():
         )
 
 
+def _кейс_с_builder(builder: str) -> Case:
+    return Case.model_validate(
+        {
+            "id": "x-y",
+            "title": "Адаптер",
+            "source": ".",
+            "steps": [{"send": "/start", "expect": {"silent": True}}],
+            "builder": builder,
+        }
+    )
+
+
+@pytest.mark.parametrize("builder", ["legacy", "newgen", "reminder"])
+def test_встроенный_builder_принимается(builder):
+    assert _кейс_с_builder(builder).builder == builder
+
+
+@pytest.mark.parametrize(
+    "builder",
+    [
+        "botkit-farm.adapter:mypkg.mine",
+        "botkit-farm.adapter:mypkg.adapters.mine:make",
+    ],
+)
+def test_ссылка_на_сторонний_адаптер_принимается(builder):
+    """Форма ссылки проверяется на загрузке: опечатку видно до прогона, а
+    существование модуля — нет, он в окружении бота."""
+    assert _кейс_с_builder(builder).builder == builder
+
+
+@pytest.mark.parametrize(
+    "builder",
+    [
+        "чепуха",
+        "botkit-farm.adapter:",
+        "botkit-farm.adapter:mypkg..mine",
+        "botkit-farm.adapter:mypkg.mine:бэд",
+        "botkit-farm.adapter:mypkg/../mine",
+    ],
+)
+def test_недопустимый_builder_отвергается(builder):
+    with pytest.raises(ValueError, match="builder"):
+        _кейс_с_builder(builder)
+
+
+def test_отсутствие_builder_допустимо():
+    """builder необязателен: движок определит поколение по коду репозитория."""
+    case = Case.model_validate(
+        {
+            "id": "x-y",
+            "title": "Без адаптера",
+            "source": ".",
+            "steps": [{"send": "/start", "expect": {"silent": True}}],
+        }
+    )
+    assert case.builder is None
+
+
 @pytest.mark.parametrize("bad_id", ["Плохой", "../escape", "with space", "UPPER"])
 def test_ид_с_небезопасными_символами_отвергается(bad_id):
     """id попадает в имя файла отчёта и путь кадра — с ../ он бы ушёл из каталога."""

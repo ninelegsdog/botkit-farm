@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import pathlib
+from types import SimpleNamespace
 
 from botkit_farm.runner import host
 
@@ -57,3 +58,40 @@ def test_нарушения_не_делятся_между_результата�
     first.violations.append("open → /home/x")
 
     assert second.violations == []
+
+
+def test_хост_получает_модуль_и_фабрику_адаптера(tmp_path: pathlib.Path, monkeypatch) -> None:
+    """Ссылка на сторонний адаптер уходит в подпроцесс разобранной.
+
+    Скрипт-хост склеивает модуль с префиксом фермы сам; если движок передаст
+    сюда `spec` вместо `module`, сторонний адаптер не найдётся. Здесь это
+    ловится без запуска настоящего бота: подпроцесс подменён.
+    """
+    seen: dict[str, object] = {}
+    monkeypatch.delenv("BOTKIT_FARM_SANDBOX", raising=False)
+
+    def fake_run(cmd: list[str], **kw: object) -> SimpleNamespace:
+        seen["cmd"] = cmd
+        script = pathlib.Path(cmd[-1])
+        seen["script"] = script.read_text(encoding="utf-8")
+        (script.parent / "result.json").write_text("[]", encoding="utf-8")
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(host.subprocess, "run", fake_run)
+
+    res = host.run_bot(
+        farm_src=tmp_path,
+        bot_python=tmp_path / "py",
+        bot_dir=tmp_path / "bot",
+        adapter_module="mypkg.mine",
+        adapter_attr="make",
+        port=8100,
+        fixture=None,
+        steps=[],
+        db_path=tmp_path / "b.db",
+    )
+
+    assert "ADAPTER_MODULE = 'mypkg.mine'" in seen["script"]
+    assert "ADAPTER_ATTR = 'make'" in seen["script"]
+    assert res.error == ""
+    assert res.turns == []

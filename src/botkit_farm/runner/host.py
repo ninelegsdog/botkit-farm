@@ -37,9 +37,11 @@ import asyncio, json, os, sys
 # после chdir в пути бота они могут перекрыться его собственным пакетом src.
 sys.path.insert(0, {farm_src!r})
 
-from botkit_farm import fake_api, quarantine, scene, stand
+from botkit_farm import fake_api, quarantine, scene, security, stand
+from botkit_farm.adapters import contract as adapter_contract
 
-ADAPTER = 'botkit_farm.adapters.' + {adapter!r}
+ADAPTER_MODULE = {adapter_module!r}
+ADAPTER_ATTR = {adapter_attr!r}
 BOT_DIR = {bot_dir!r}
 PORT = {port!r}
 RESULT = {result!r}
@@ -86,15 +88,24 @@ def _seed_mod():
 
 
 async def main():
-    import importlib
     rec = fake_api.Recorder()
     runner = await fake_api.serve(rec, port=PORT)
     bot = None
     try:
-        mod = importlib.import_module(ADAPTER)
+        # Фабрику ищем по ссылке из кейса — встроенный адаптер это тоже
+        # `botkit_farm.adapters.<имя>`. Проверка результата живёт в контракте:
+        # адаптер, вернувший None, падает здесь, с понятным текстом, а не
+        # позже на `dp.feed_update`.
+        build = adapter_contract.load_builder(ADAPTER_MODULE, ADAPTER_ATTR)
         seeder = _seed_mod()
-        dp, bot, _db = await mod.build(bot_dir=__import__("pathlib").Path(BOT_DIR),
-                                       key="run", port=PORT, seed=seeder)
+        built = adapter_contract.check(
+            await build(bot_dir=__import__("pathlib").Path(BOT_DIR),
+                        key="run", port=PORT, seed=seeder)
+        )
+        dp, bot = built.dispatcher, built.bot
+        # Адаптер обязан не менять токен. Проверяем это после сборки, а не
+        # только до: сторонний адаптер — код, который мы не писали.
+        security.assert_fake_token()
         turns = []
         known = {{}}
         last_buttons = []
@@ -222,7 +233,8 @@ def run_bot(
     farm_src: pathlib.Path,
     bot_python: pathlib.Path,
     bot_dir: pathlib.Path,
-    adapter: str,
+    adapter_module: str,
+    adapter_attr: str,
     port: int,
     fixture: pathlib.Path | None,
     steps: list[dict[str, object]],
@@ -251,7 +263,8 @@ def run_bot(
 
         host = _HOST.format(
             farm_src=str(farm_src),
-            adapter=adapter,
+            adapter_module=adapter_module,
+            adapter_attr=adapter_attr,
             bot_dir=str(bot_dir),
             port=port,
             db_path=str(db_path),

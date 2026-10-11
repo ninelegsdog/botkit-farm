@@ -17,13 +17,17 @@ from typing import Any
 from botkit_farm import env as envmod
 from botkit_farm import fixtures as fx
 from botkit_farm import security
+from botkit_farm.adapters import registry as adapters
+from botkit_farm.adapters.registry import AdapterRef
 from botkit_farm.case.model import Case, Expect
 from botkit_farm.inspector.repo import detect_builder
 from botkit_farm.runner.contract import CrashTurn, HostTurn, Media, NoButtonTurn
 from botkit_farm.runner.host import ExecResult, run_bot
 from botkit_farm.runner.result import CaseResult, Failure, Status, Turn
 
-BUILDERS = {"legacy", "newgen", "reminder"}
+# Встроенные поколения сборки. Сторонние адаптеры подключаются ссылкой
+# `botkit-farm.adapter:<модуль>` — их допустимость решает `adapters.resolve`.
+BUILDERS = set(adapters.BUILTIN)
 # Пауза между шагами по умолчанию: боты тротттлинг, и «бот промолчал» на быстрых
 # сообщениях — артефакт стенда, а не дефект бота. В кейсе переопределяется
 # через `pause`.
@@ -34,11 +38,14 @@ class RunError(Exception):
     """Прогон невозможен: нет Redis, не собралось окружение, нет адаптера."""
 
 
-def _adapter_for(case: Case, bot_dir: pathlib.Path) -> str:
+def _adapter_for(case: Case, bot_dir: pathlib.Path) -> AdapterRef:
     """Выбрать адаптер сборки: из кейса или по структуре репозитория.
 
-    Три поколения отличаются не стилем, а точкой входа, и ошибка здесь стоит
-    дорого: не тот адаптер даст ImportError, который выглядит как баг бота.
+    Три встроенных поколения отличаются не стилем, а точкой входа, и ошибка
+    здесь стоит дорого: не тот адаптер даёт ImportError, который выглядит как
+    баг бота. Кроме встроенных имён `builder` может быть ссылкой на сторонний
+    адаптер (`botkit-farm.adapter:<модуль>`); её форму проверила модель кейса, а
+    разбор в пару `module:attr` делает `adapters.resolve`.
     """
     builder: str | None = case.builder
     if builder is None:
@@ -48,9 +55,7 @@ def _adapter_for(case: Case, bot_dir: pathlib.Path) -> str:
                 f"{case.id}: не удалось определить поколение сборки ({why}). "
                 f"Укажите builder в кейсе: {sorted(BUILDERS)}"
             )
-    if builder not in BUILDERS:
-        raise RunError(f"{case.id}: неизвестный builder {builder!r}")
-    return builder
+    return adapters.resolve(builder)
 
 
 def _check(
@@ -203,8 +208,8 @@ def run_case(
     try:
         result.commit = _git_commit(bot_dir)
         security.assert_fake_token()
-        adapter = _adapter_for(case, bot_dir)
-        result.builder = adapter
+        ref = _adapter_for(case, bot_dir)
+        result.builder = ref.spec
 
         e = envmod.ensure_env(bot_dir, cache_dir)
         fixture = fx.path_for(case.fixture) if case.seed and case.fixture else None
@@ -227,7 +232,8 @@ def run_case(
             farm_src=_farm_src(),
             bot_python=e.python,
             bot_dir=bot_dir,
-            adapter=adapter,
+            adapter_module=ref.module,
+            adapter_attr=ref.attr,
             port=port,
             fixture=fixture,
             steps=steps,

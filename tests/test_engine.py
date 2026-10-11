@@ -12,10 +12,16 @@ from typing import Any
 
 import pytest
 
+from botkit_farm.adapters.registry import resolve as _resolve
 from botkit_farm.case.model import Case, Expect
 from botkit_farm.runner import engine
 from botkit_farm.runner.contract import Media, parse_turns
 from botkit_farm.runner.result import CaseResult, Failure, Status, Turn
+
+
+def _ref(builder: str):
+    """Ссылка на адаптер так, как её вернул бы движок."""
+    return _resolve(builder)
 
 
 def _turns(*raw: dict[str, Any]) -> list[Any]:
@@ -230,7 +236,20 @@ def test_диалог_собирается_для_кадра():
 
 def test_builder_из_кейса_используется(tmp_path):
     case = _case(builder="newgen")
-    assert engine._adapter_for(case, tmp_path) == "newgen"
+    ref = engine._adapter_for(case, tmp_path)
+    assert ref.spec == "newgen"
+    assert ref.module == "botkit_farm.adapters.newgen"
+    assert ref.attr == "build"
+
+
+def test_сторонний_builder_разбирается_на_модуль_и_фабрику(tmp_path):
+    """`builder` — не только имя поколения, но и ссылка на плагин."""
+    case = _case(builder="botkit-farm.adapter:mypkg.adapters.mine")
+    ref = engine._adapter_for(case, tmp_path)
+    assert ref.spec == "botkit-farm.adapter:mypkg.adapters.mine"
+    assert ref.module == "mypkg.adapters.mine"
+    assert ref.attr == "build"
+    assert ref.builtin is False
 
 
 def test_неизвестный_builder_отвергается(tmp_path):
@@ -563,7 +582,7 @@ def test_обнаруженный_builder_используется(tmp_path):
     Ветка «builder найден» иначе не проверяется."""
     (tmp_path / "src").mkdir()
     (tmp_path / "src" / "app.py").write_text("def create_app():\n    ...\n", encoding="utf-8")
-    assert engine._adapter_for(_case(), tmp_path) == "newgen"
+    assert engine._adapter_for(_case(), tmp_path).spec == "newgen"
 
 
 def test_неопознанный_репозиторий_объясняет_причину(tmp_path):
@@ -786,7 +805,7 @@ def test_обязательный_шаг_с_ожиданием_фиксируе�
 def _готовая_среда(tmp_path, monkeypatch, execr):
     """Подменить всё, до чего прогон не дойдёт без настоящего бота."""
     monkeypatch.setattr(engine.security, "assert_fake_token", lambda: None)
-    monkeypatch.setattr(engine, "_adapter_for", lambda case, bot_dir: "newgen")
+    monkeypatch.setattr(engine, "_adapter_for", lambda case, bot_dir: _ref("newgen"))
     monkeypatch.setattr(
         engine.envmod,
         "ensure_env",

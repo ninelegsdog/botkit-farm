@@ -20,6 +20,8 @@ from typing import Any
 import pytest
 
 from botkit_farm import security
+from botkit_farm.adapters import registry as adapters
+from botkit_farm.adapters.registry import AdapterRef
 from botkit_farm.case.model import Case
 from botkit_farm.runner import engine
 from botkit_farm.runner.contract import StepTurn, parse_turns
@@ -280,16 +282,23 @@ class _Окружение:
     падать здесь, а не на чужом боте.
     """
 
-    def __init__(self, tmp_path: pathlib.Path, monkeypatch, execr: ExecResult) -> None:
+    def __init__(
+        self,
+        tmp_path: pathlib.Path,
+        monkeypatch,
+        execr: ExecResult,
+        *,
+        real_adapter: bool = False,
+    ) -> None:
         self.вызовы: dict[str, Any] = {}
         python = tmp_path / "envs" / "bin" / "python"
 
         def fake_assert_token() -> None:
             self.вызовы["токен"] = True
 
-        def fake_adapter(case: Case, bot_dir: pathlib.Path) -> str:
+        def fake_adapter(case: Case, bot_dir: pathlib.Path) -> AdapterRef:
             self.вызовы["adapter_args"] = (case.id, bot_dir)
-            return "newgen"
+            return adapters.resolve("newgen")
 
         def fake_env(bot_dir: pathlib.Path, cache: pathlib.Path) -> Any:
             self.вызовы["env_args"] = (bot_dir, cache)
@@ -304,7 +313,8 @@ class _Окружение:
             return execr
 
         monkeypatch.setattr(security, "assert_fake_token", fake_assert_token)
-        monkeypatch.setattr(engine, "_adapter_for", fake_adapter)
+        if not real_adapter:
+            monkeypatch.setattr(engine, "_adapter_for", fake_adapter)
         monkeypatch.setattr(engine.envmod, "ensure_env", fake_env)
         monkeypatch.setattr(engine, "_git_commit", fake_commit)
         monkeypatch.setattr(engine, "run_bot", fake_run_bot)
@@ -354,6 +364,8 @@ def test_каждый_вызов_получает_свои_аргументы(tm
     kw = окружение.вызовы
 
     assert kw["adapter_args"] == ("booking", bot)
+    assert kw["adapter_module"] == "botkit_farm.adapters.newgen"
+    assert kw["adapter_attr"] == "build"
     assert kw["env_args"] == (bot, cache)
     assert kw["commit_root"] == bot
     assert kw["bot_dir"] == bot
@@ -429,6 +441,24 @@ def test_сборка_и_коммит_попадают_в_отчёт(tmp_path, m
     assert res.commit == "abc1234"
 
 
+def test_сторонний_адаптер_доходит_до_хоста_разобранным(tmp_path, monkeypatch) -> None:
+    """Ссылка из кейса разбирается движком, а не склеивается с «адаптерс.» хоста.
+
+    Модуль и фабрика идут в подпроцесс по отдельности: если движок перепутает
+    `spec`, `module` или `attr`, сторонний адаптер не найдётся у бота.
+    """
+    case = _кейс(builder="botkit-farm.adapter:mypkg.plug:make")
+    окружение = _Окружение(tmp_path, monkeypatch, ExecResult(turns=[]), real_adapter=True)
+
+    res = engine.run_case(
+        case, bot_dir=tmp_path / "bot", cache_dir=tmp_path / "envs", work_dir=tmp_path / ".work"
+    )
+
+    assert res.builder == "botkit-farm.adapter:mypkg.plug:make"
+    assert окружение.вызовы["adapter_module"] == "mypkg.plug"
+    assert окружение.вызовы["adapter_attr"] == "make"
+
+
 def test_база_обнуляется_перед_каждым_прогоном(tmp_path, monkeypatch) -> None:
     """Иначе второй запуск продолжил бы диалог с середины."""
     case = _кейс()
@@ -473,7 +503,8 @@ def test_в_хост_уходят_шаги_и_каталоги_прогона(tm
     assert [s["kind"] for s in kw["steps"]] == ["msg", "cb"]
     assert kw["steps"][0]["gap"] == 1.5
     assert kw["port"] == engine._api_port("booking")
-    assert kw["adapter"] == "newgen"
+    assert kw["adapter_module"] == "botkit_farm.adapters.newgen"
+    assert kw["adapter_attr"] == "build"
     # Каталог venv идёт в песочницу: интерпретатор бота лежит не в репозитории.
     assert kw["env_root"] == tmp_path / "envs"
 

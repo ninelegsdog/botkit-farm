@@ -53,7 +53,7 @@ python3 -m venv .venv
 id: booking-start          # только [a-z0-9_-], станет именем отчёта и кадра
 title: Стартовое меню записи
 source: ../bots/botkit-bookingbot   # локальный путь или https/git-URL
-builder: newgen            # legacy | newgen | reminder (можно не указывать — определится)
+builder: newgen            # legacy | newgen | reminder (или сторонний адаптер)
 frame: window              # window | phone | wide — как снимать кадр
 
 steps:
@@ -70,6 +70,15 @@ steps:
 `expect` описывает, что **должно** быть в ответе. Пустое ожидание — ошибка
 валидации: кейс, который ничего не проверяет, не может упасть, а значит, не
 доказывает ничего.
+
+`builder` можно не указывать — поколение определится по коду. Для бота с
+собственным композиционным корнем он принимает ссылку на сторонний адаптер:
+
+```yaml
+builder: botkit-farm.adapter:mypkg.adapters.mine   # модуль ставится в окружение бота
+```
+
+Контракт адаптера и четыре референсных сборки — в [docs/adapters/](docs/adapters/README.md).
 
 ## Команды
 
@@ -153,7 +162,10 @@ src/botkit_farm/
   runner/     движок прогона и модель результата
   inspector/  разбор репозитория (команды, кнопки, тексты)
   report/     Markdown- и JSON-отчёты
-  adapters/   сборка бота трёх поколений (legacy/newgen/reminder)
+  adapters/   сборка бота: встроенные поколения + точка расширения
+    legacy/newgen/reminder — композиционные корни фермы
+    registry.py — разбор `builder` (встроенное имя или ссылка на плагин)
+    contract.py — что обязан вернуть `build()`, проверка pydantic-моделью
   pack.py     пак `.botkit-farm`: манифест bot.yaml и каркас
   fake_api.py поддельный Telegram Bot API
   scene.py    Update'ы: сообщение и нажатие кнопки

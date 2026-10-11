@@ -18,6 +18,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from botkit_farm.adapters import registry as adapters
 from botkit_farm.case.migration import SCHEMA_VERSION
 
 
@@ -158,8 +159,11 @@ class Case(Strict):
     # «прогнать что-нибудь» не означало «клонировать что попало из сети».
     source: str = Field(min_length=1, max_length=2048)
     # Поколение сборки бота: legacy (Kit v2), newgen (create_app), reminder
-    # (модульный синглтон). Определяется по коду репозитория, если не задан.
-    builder: Literal["legacy", "newgen", "reminder"] | None = None
+    # (модульный синглтон) или сторонний адаптер ссылкой
+    # `botkit-farm.adapter:<модуль>[:<фабрика>]`. Определяется по коду
+    # репозитория, если не задан. Форма ссылки проверяется сразу: существование
+    # модуля — нет, он живёт в окружении бота, недоступном ферме.
+    builder: str | None = Field(default=None, max_length=256)
     # Фикстуры — модуль с seed(db) в cases/fixtures/, заполняющий базу до
     # прогона. Без неё кейс стартует на пустой базе.
     fixture: str | None = Field(default=None, pattern=r"^[a-z0-9_]+$")
@@ -191,6 +195,18 @@ class Case(Strict):
         bad = [t for t in v if t not in known]
         if bad:
             raise ValueError(f"неизвестные теги {bad}; допустимы {sorted(known)}")
+        return v
+
+    @field_validator("builder")
+    @classmethod
+    def _builder_допустим(cls, v: str | None) -> str | None:
+        """Форма ссылки на адаптер проверяется сразу, а не в середине прогона.
+
+        Существование плагина — нет: его модуль стоит в окружении бота, а не
+        фермы. Но опечатку в имени встроенного адаптера видно уже на загрузке.
+        """
+        if v is not None and not adapters.is_valid(v):
+            raise ValueError(adapters.unknown_builder(v))
         return v
 
     @model_validator(mode="after")

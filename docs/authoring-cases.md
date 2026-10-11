@@ -21,7 +21,7 @@ botkit-farm study ./bots/botkit-bookingbot
 id: booking-happy-path        # [a-z0-9_-], станет именем отчёта и кадра
 title: Запись клиента — полный путь
 source: ./bots/botkit-bookingbot
-builder: legacy               # можно не указывать — определится само
+builder: legacy               # legacy | newgen | reminder или ссылка на плагин
 fixture: bookingbot           # модуль с seed(db), если нужны данные
 frame: window
 
@@ -33,7 +33,9 @@ steps:
 ```
 
 Поля кейса — в [README](../README.md); схема с проверками — в
-`src/botkit_farm/case/model.py`.
+`src/botkit_farm/case/model.py`. Для бота с собственным композиционным корнем
+`builder` принимает ссылку `botkit-farm.adapter:<модуль>` — контракт и
+референсные сборки в [adapters/](adapters/README.md).
 
 ### Три вида шага
 
