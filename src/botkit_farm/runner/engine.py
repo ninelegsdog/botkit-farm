@@ -228,6 +228,20 @@ def run_case(
         db_path = (work_dir / f"{case.id}.db").resolve()
         db_path.unlink(missing_ok=True)
 
+        # Актёры и чат для мультипользовательских кейсов (ТЗ C3)
+        actors_data = {
+            role: {"user_id": a.user_id, "name": a.name, "is_bot": a.is_bot}
+            for role, a in case.actors.items()
+        }
+        chat_data = None
+        if case.chat:
+            chat_data = {
+                "type": case.chat.type,
+                "title": case.chat.title,
+                "thread_id": case.chat.thread_id,
+                "bot_username": case.chat.bot_username,
+            }
+
         execr: ExecResult = run_bot(
             farm_src=_farm_src(),
             bot_python=e.python,
@@ -239,6 +253,8 @@ def run_case(
             fixture=fixture,
             steps=steps,
             db_path=db_path,
+            actors=actors_data,  # type: ignore[arg-type]
+            chat=chat_data,  # type: ignore[arg-type]
             # Каталог с venv бота: он лежит рядом с репозиторием, а не внутри
             # него, и без него песочница не увидит интерпретатор.
             env_root=cache_dir,
@@ -272,6 +288,9 @@ def _to_steps(case: Case, default_gap: float) -> list[dict[str, Any]]:
             out.append({"kind": "pick", "value": st.pick, "label": st.label()})
         else:
             out.append({"kind": "msg", "value": str(st.send), "label": st.label()})
+        # Роль исполнителя шага (ТЗ C3)
+        if st.as_:
+            out[-1]["as"] = st.as_
         if st.pause is not None:
             out[-1]["pause"] = st.pause
         else:

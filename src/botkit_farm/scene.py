@@ -3,6 +3,10 @@
 Сценарий — это последовательность действий «обычного клиента в Telegram»:
 написать текст или нажать inline-кнопку. Каждое действие превращается в Update,
 который отдаётся реальному диспетчеру бота.
+
+Поддержка мультипользовательских кейсов (ТЗ C3): можно задать несколько
+акторов (ролей) с разными user_id и чат (private/group/supergroup). Если
+акторы не заданы, используется классический один FAKE_USER_ID.
 """
 
 from __future__ import annotations
@@ -33,65 +37,123 @@ FAKE_NAME = "Иван П."
 FAKE_PHONE = "+7 (999) 000-00-00"
 
 
-def _chat() -> Any:
-    from aiogram.types import Chat
+@dataclass
+class Actor:
+    """Участник мультипользовательского кейса.
 
-    return Chat(id=FAKE_CHAT_ID, type="private")
+    Используется в scene для построения Update с нужным from_user и chat.
+    """
+
+    user_id: int
+    first_name: str = "Иван"
+    last_name: str = "П."
+    is_bot: bool = False
+    username: str | None = None
+
+    def to_aiogram_user(self) -> Any:
+        """Convert to aiogram User."""
+        from aiogram.types import User
+
+        return User(
+            id=self.user_id,
+            is_bot=self.is_bot,
+            first_name=self.first_name,
+            last_name=self.last_name,
+            username=self.username,
+        )
 
 
-def _user() -> Any:
-    from aiogram.types import User
+@dataclass
+class ChatConfig:
+    """Настройки чата для Update.
 
-    return User(id=FAKE_USER_ID, is_bot=False, first_name="Иван", last_name="П.")
+    type: private | group | supergroup
+    title: название чата (для групп)
+    thread_id: ID топика (для форумов)
+    bot_username: username бота (для упоминаний)
+    """
+
+    id: int = FAKE_CHAT_ID
+    type: str = "private"
+    title: str | None = None
+    thread_id: int | None = None
+    bot_username: str | None = None
+
+    def to_aiogram_chat(self) -> Any:
+        """Convert to aiogram Chat."""
+        from aiogram.types import Chat
+
+        return Chat(id=self.id, type=self.type, title=self.title)
 
 
-def _incoming_message(text: str, mid: int) -> Any:
-    from aiogram.types import Chat, Message, User
+def _default_actor() -> Actor:
+    return Actor(user_id=FAKE_USER_ID, first_name="Иван", last_name="П.")
 
+
+def _default_chat() -> ChatConfig:
+    return ChatConfig(id=FAKE_CHAT_ID, type="private")
+
+
+def _incoming_message(
+    text: str,
+    mid: int,
+    *,
+    actor: Actor | None = None,
+    chat: ChatConfig | None = None,
+) -> Any:
+    from aiogram.types import Message
+
+    actor = actor or _default_actor()
+    chat = chat or _default_chat()
     now = dt.datetime.now(tz=dt.UTC)
     return Message(
         message_id=mid,
         date=now,
-        chat=Chat(id=FAKE_CHAT_ID, type="private"),
-        from_user=User(id=FAKE_USER_ID, is_bot=False, first_name="Иван", last_name="П."),
+        chat=chat.to_aiogram_chat(),
+        from_user=actor.to_aiogram_user(),
         text=text,
     )
 
 
-def to_update(step: Step, update_id: int, bot_message_id: int = 1) -> Any:
+def to_message(
+    text: str,
+    update_id: int,
+    *,
+    actor: Actor | None = None,
+    chat: ChatConfig | None = None,
+) -> Any:
+    """Update с текстовым сообщением от клиента."""
+    from aiogram.types import Update
+
+    return Update(
+        update_id=update_id,
+        message=_incoming_message(text, 100 + update_id, actor=actor, chat=chat),
+    )
+
+
+def to_callback(
+    data: str,
+    update_id: int,
+    bot_message_id: int = 1,
+    *,
+    actor: Actor | None = None,
+    chat: ChatConfig | None = None,
+) -> Any:
+    """Update с нажатием inline-кнопки (callback_data)."""
     from aiogram.types import CallbackQuery, Update
 
-    if step.kind == "msg":
-        return Update(
-            update_id=update_id,
-            message=_incoming_message(step.payload, 100 + update_id),
-        )
+    actor = actor or _default_actor()
+    chat = chat or _default_chat()
     return Update(
         update_id=update_id,
         callback_query=CallbackQuery(
             id=str(5000 + update_id),
-            from_user=_user(),
+            from_user=actor.to_aiogram_user(),
             chat_instance="farm",
-            data=step.payload,
-            message=_incoming_message("", bot_message_id),
+            data=data,
+            message=_incoming_message("", bot_message_id, actor=actor, chat=chat),
         ),
     )
-
-
-# ── Тонкие обёртки для раннера новой фермы ───────────────────────────────────
-# Старый Step — dataclass с kind/payload; новый кейс о нём не знает. Эти две
-# функции принимают готовые значения и отдают тот же Update, поэтому раннер не
-# подстраивает кейс под сцену, а сцена остаётся ровно той, что проверена годами.
-
-
-def to_message(text: str, update_id: int) -> Any:
-    """Update с текстовым сообщением от клиента."""
-    return to_update(Step("msg", text), update_id)
-
-
-def to_callback(data: str, update_id: int, bot_message_id: int = 1) -> Any:
-    """Update с нажатием inline-кнопки (callback_data)."""
-    return to_update(Step("cb", data), update_id, bot_message_id)
 
 
 def to_raw_update(update: Any) -> dict[str, Any]:
@@ -112,3 +174,19 @@ def to_raw_update(update: Any) -> dict[str, Any]:
     # результат dump тоже Any; аннотация возврата держит границу типизированной.
     dumped: dict[str, Any] = update.model_dump(mode="json", by_alias=True, exclude_none=True)
     return dumped
+
+
+__all__ = [
+    "Actor",
+    "ChatConfig",
+    "FAKE_USER_ID",
+    "FAKE_CHAT_ID",
+    "FAKE_NAME",
+    "FAKE_PHONE",
+    "Step",
+    "cb",
+    "msg",
+    "to_callback",
+    "to_message",
+    "to_raw_update",
+]

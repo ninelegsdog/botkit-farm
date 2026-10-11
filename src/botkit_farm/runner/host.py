@@ -48,6 +48,8 @@ PORT = {port!r}
 RESULT = {result!r}
 DB_PATH = {db_path!r}
 VIOLATIONS = {violations!r}
+ACTORS = {actors!r}
+CHAT = {chat!r}
 
 # Карантин ставится ДО импорта кода бота: пока модуль не импортирован, он не
 # успел ничего написать. Запрет egress в ферме сюда не дотягивается — подпроцесс
@@ -117,8 +119,32 @@ async def main():
             elif step.get("gap"):
                 await asyncio.sleep(float(step["gap"]))
             if step["kind"] == "msg":
-                update = scene.to_message(step["value"], uid)
+                # Определить актёра и чат для шага (ТЗ C3)
+                role = step.get("as")
+                actor_cfg = ACTORS.get(role) if role else None
+                actor = None
+                if actor_cfg:
+                    from botkit_farm.scene import Actor
+                    actor = Actor(user_id=actor_cfg["user_id"], name=actor_cfg.get("name"), is_bot=actor_cfg.get("is_bot", False))
+                chat_cfg = CHAT if CHAT else None
+                chat = None
+                if chat_cfg:
+                    from botkit_farm.scene import ChatConfig
+                    chat = ChatConfig(id=FAKE_CHAT_ID, type=chat_cfg.get("type", "private"), title=chat_cfg.get("title"), thread_id=chat_cfg.get("thread_id"), bot_username=chat_cfg.get("bot_username"))
+                update = scene.to_message(step["value"], uid, actor=actor, chat=chat)
             elif step["kind"] == "pick":
+                # Определить актёра и чат для шага (ТЗ C3)
+                role = step.get("as")
+                actor_cfg = ACTORS.get(role) if role else None
+                actor = None
+                if actor_cfg:
+                    from botkit_farm.scene import Actor
+                    actor = Actor(user_id=actor_cfg["user_id"], name=actor_cfg.get("name"), is_bot=actor_cfg.get("is_bot", False))
+                chat_cfg = CHAT if CHAT else None
+                chat = None
+                if chat_cfg:
+                    from botkit_farm.scene import ChatConfig
+                    chat = ChatConfig(id=FAKE_CHAT_ID, type=chat_cfg.get("type", "private"), title=chat_cfg.get("title"), thread_id=chat_cfg.get("thread_id"), bot_username=chat_cfg.get("bot_username"))
                 # Кнопка по позиции: бот сам сообщает, что он предлагает (даты,
                 # слоты, идентификаторы), и зашивать это в кейс нельзя.
                 last_btns = last_buttons or []
@@ -138,6 +164,18 @@ async def main():
                 update = scene.to_callback(last_btns[pos], uid)
             else:
                 data = step["value"]
+                # Определить актёра и чат для шага (ТЗ C3)
+                role = step.get("as")
+                actor_cfg = ACTORS.get(role) if role else None
+                actor = None
+                if actor_cfg:
+                    from botkit_farm.scene import Actor
+                    actor = Actor(user_id=actor_cfg["user_id"], name=actor_cfg.get("name"), is_bot=actor_cfg.get("is_bot", False))
+                chat_cfg = CHAT if CHAT else None
+                chat = None
+                if chat_cfg:
+                    from botkit_farm.scene import ChatConfig
+                    chat = ChatConfig(id=FAKE_CHAT_ID, type=chat_cfg.get("type", "private"), title=chat_cfg.get("title"), thread_id=chat_cfg.get("thread_id"), bot_username=chat_cfg.get("bot_username"))
                 cb = None
                 for k, v in known.items():
                     if v == data:
@@ -148,7 +186,7 @@ async def main():
                                    "known": sorted(set(known.values()))[:50]}})
                     uid += 1
                     continue
-                update = scene.to_callback(cb, uid)
+                update = scene.to_callback(cb, uid, actor=actor, chat=chat)
             uid += 1
             before = len(rec.calls)
             try:
@@ -247,6 +285,8 @@ def run_bot(
     fixture: pathlib.Path | None,
     steps: list[dict[str, object]],
     db_path: pathlib.Path,
+    actors: dict[str, object] | None = None,
+    chat: dict[str, object] | None = None,
     redis_url: str = "redis://127.0.0.1:6380/0",
     timeout: int = 300,
     env_root: pathlib.Path | None = None,
@@ -282,6 +322,8 @@ def run_bot(
             steps_file=str(steps_file),
             result=str(result_file),
             violations=str(violations_file),
+            actors=json.dumps(actors) if actors else "{}",
+            chat=json.dumps(chat) if chat else "null",
         )
         host_file = tmpdir / "host.py"
         host_file.write_text(host, encoding="utf-8")

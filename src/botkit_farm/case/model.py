@@ -38,6 +38,32 @@ class Strict(BaseModel):
 # любой реплики бота.
 MAX_TEXT = 4096
 
+
+class Actor(Strict):
+    """Один участник (роль) в мультипользовательском кейсе.
+
+    У каждого участника свой `user_id` — это ключ для изоляции FSM бота.
+    Имя опционально, для кадра. `is_bot` — для бот-акторов (редко).
+    """
+
+    user_id: int = Field(ge=1)
+    name: str | None = Field(default=None, max_length=64)
+    is_bot: bool = False
+
+
+class ChatSpec(Strict):
+    """Настройки чата для группового/тредового кейса.
+
+    `type`: private | group | supergroup. `title` — для групп/супергрупп.
+    `thread_id` — для форумов (топики). `bot_username` — для упоминаний.
+    """
+
+    type: Literal["private", "group", "supergroup"] = "private"
+    title: str | None = Field(default=None, max_length=128)
+    thread_id: int | None = Field(default=None, ge=1)
+    bot_username: str | None = Field(default=None, max_length=32)
+
+
 # Виды медиа, которые ферма умеет ловить и рисовать. Список закрыт намеренно:
 # неизвестный вид — это сигнал, что кейс и фейковый API разъехались, а не
 # «нарисуем пустоту» (роадмап B2). Живёт рядом с Expect, потому что и модель
@@ -117,6 +143,9 @@ class Step(Strict):
     # Пометка «этот шаг можно упасть без порчи кейса» — для навигационных
     # шагов, где у бота нет одного правильного ответа.
     optional: bool = False
+    # Роль исполнителя шага (ТЗ C3). Если в кейсе заданы actors, поле обязательно
+    # и должно ссылаться на существующую роль. Если actors пуст — поле игнорируется.
+    as_: str | None = Field(default=None, alias="as", max_length=32)
     # Якорь шага в коде (команда/кнопка/обработчик)
     anchor: str | None = Field(default=None, max_length=512)
     note: str | None = Field(default=None, max_length=512)
@@ -176,6 +205,13 @@ class Case(Strict):
     # означает «свежая база».
     seed: bool = True
 
+    # Роли (участники) для мультипользовательских кейсов (ТЗ C3).
+    # Словарь: роль -> Actor(user_id, name?). Пустой = обычный кейс с одним
+    # пользователем (FAKE_USER_ID). Если задан, шаги должны иметь `as: роль`.
+    actors: dict[str, Actor] = Field(default_factory=dict)
+    # Настройки чата: тип (private/group/supergroup), название, тред, ботюзернейм.
+    chat: ChatSpec | None = None
+
     # Заголовок кадра: имя бота в шапке и подпись «демо-интерфейс» на фото.
     frame_title: str | None = Field(default=None, max_length=80)
     frame_handle: str | None = Field(default=None, max_length=80)
@@ -227,6 +263,30 @@ class Case(Strict):
             )
         return self
 
+    @model_validator(mode="after")
+    def _actors_и_as_согласованы(self) -> Case:
+        """Если заданы actors, каждый шаг должен иметь as, ссылающийся на роль."""
+        if not self.actors:
+            return self
+        role_names = set(self.actors.keys())
+        for i, step in enumerate(self.steps):
+            role = step.as_
+            if not role:
+                raise ValueError(
+                    f"шаг {i + 1}: поле 'as' обязательно, когда заданы actors. "
+                    f"Допустимые роли: {sorted(role_names)}"
+                )
+            if role not in role_names:
+                raise ValueError(
+                    f"шаг {i + 1}: роль {role!r} не найдена в actors. "
+                    f"Допустимые: {sorted(role_names)}"
+                )
+        # user_id должны быть уникальны (для изоляции FSM)
+        user_ids = [a.user_id for a in self.actors.values()]
+        if len(user_ids) != len(set(user_ids)):
+            raise ValueError("actors: user_id должны быть уникальными для изоляции FSM")
+        return self
+
 
 # Плейсхолдеры вида {{...}} — незаполненные слоты. Проверка на этапе загрузки,
 # а не на этапе рендера: незаполненный кейс должен падать до того, как бот
@@ -247,4 +307,13 @@ def find_placeholders(text: str) -> list[str]:
     return _PLACEHOLDERS.findall(text)
 
 
-__all__ = ["Case", "Expect", "Step", "MAX_TEXT", "find_slots", "find_placeholders"]
+__all__ = [
+    "Actor",
+    "Case",
+    "ChatSpec",
+    "Expect",
+    "Step",
+    "MAX_TEXT",
+    "find_slots",
+    "find_placeholders",
+]

@@ -683,3 +683,175 @@ def test_интервал_по_умолчанию_меняется_по_switch(t
     )
 
     assert окружение.вызовы["steps"][0]["gap"] == gap
+
+
+# ── Актёры и чат (ТЗ C3): проверка, что они пробрасываются в run_bot ─────────────
+
+
+def test_актеры_и_чат_пробрасываются_в_run_bot(tmp_path, monkeypatch) -> None:
+    """Если в кейсе заданы actors/chat, они должны попасть в run_bot.
+
+    Это регресс-тест: мутационное тестирование показало, что новый код не
+    проверялся — мутации, удаляющие actors_data/chat_data, выживали.
+    """
+    from botkit_farm.case.model import Actor, Case, ChatSpec, Expect, Step
+    from botkit_farm.runner.host import ExecResult
+
+    calls: dict[str, Any] = {}
+
+    def _fake_run_bot(*_a, **kw):
+        calls.update(kw)
+        return ExecResult(
+            turns=[
+                {
+                    "kind": "step",
+                    "text": "/start",
+                    "replies": [],
+                    "messages": [],
+                    "toasts": [],
+                    "media": [],
+                    "buttons": [],
+                }
+            ]
+        )
+
+    monkeypatch.setattr(engine, "run_bot", _fake_run_bot)
+
+    # Кейс с актерами и чатом
+    case = Case(
+        schema_version=1,
+        id="multi-test",
+        title="Multi-user test",
+        source="./bots/botkit-bookingbot",
+        builder="legacy",
+        actors={
+            "client": Actor(user_id=1001, name="Client"),
+            "admin": Actor(user_id=424242, name="Admin", is_bot=False),
+        },
+        chat=ChatSpec(type="group", title="Test Group", thread_id=42, bot_username="testbot"),
+        steps=[
+            Step(send="/start", **{"as": "client"}, expect=Expect(silent=True)),
+            Step(send="hello", **{"as": "admin"}, expect=Expect(silent=True)),
+        ],
+    )
+
+    engine.run_case(
+        case, bot_dir=tmp_path / "bot", cache_dir=tmp_path / "envs", work_dir=tmp_path / ".work"
+    )
+
+    # Проверить, что actors и chat переданы в run_bot
+    assert "actors" in calls, "actors не передан в run_bot"
+    assert "chat" in calls, "chat не передан в run_bot"
+
+    actors = calls["actors"]
+    assert actors is not None
+    assert "client" in actors
+    assert "admin" in actors
+    assert actors["client"]["user_id"] == 1001
+    assert actors["client"]["name"] == "Client"
+    assert actors["admin"]["user_id"] == 424242
+    assert actors["admin"]["name"] == "Admin"
+    assert actors["admin"]["is_bot"] is False
+
+    chat = calls["chat"]
+    assert chat is not None
+    assert chat["type"] == "group"
+    assert chat["title"] == "Test Group"
+    assert chat["thread_id"] == 42
+    assert chat["bot_username"] == "testbot"
+
+
+def test_без_актеров_actors_пустой_словарь(tmp_path, monkeypatch) -> None:
+    """Если actors не заданы, передаётся пустой словарь (не None)."""
+    from botkit_farm.case.model import Case, Expect, Step
+    from botkit_farm.runner.host import ExecResult
+
+    calls: dict[str, Any] = {}
+
+    def _fake_run_bot(*_a, **kw):
+        calls.update(kw)
+        return ExecResult(
+            turns=[
+                {
+                    "kind": "step",
+                    "text": "/start",
+                    "replies": [],
+                    "messages": [],
+                    "toasts": [],
+                    "media": [],
+                    "buttons": [],
+                }
+            ]
+        )
+
+    monkeypatch.setattr(engine, "run_bot", _fake_run_bot)
+
+    case = Case(
+        schema_version=1,
+        id="single-test",
+        title="Single user",
+        source="./bots/botkit-bookingbot",
+        builder="legacy",
+        steps=[
+            Step(send="/start", expect=Expect(silent=True)),
+        ],
+    )
+
+    engine.run_case(
+        case, bot_dir=tmp_path / "bot", cache_dir=tmp_path / "envs", work_dir=tmp_path / ".work"
+    )
+
+    actors = calls.get("actors")
+    assert actors is not None
+    assert actors == {}
+
+    chat = calls.get("chat")
+    assert chat is None
+
+
+def test_шаги_содержат_as_когда_заданы_actors(tmp_path, monkeypatch) -> None:
+    """Шаги в run_bot должны содержать поле 'as' при заданных actors."""
+    from botkit_farm.case.model import Actor, Case, ChatSpec, Expect, Step
+    from botkit_farm.runner.host import ExecResult
+
+    calls: dict[str, Any] = {}
+
+    def _fake_run_bot(*_a, **kw):
+        calls.update(kw)
+        return ExecResult(
+            turns=[
+                {
+                    "kind": "step",
+                    "text": "/start",
+                    "replies": [],
+                    "messages": [],
+                    "toasts": [],
+                    "media": [],
+                    "buttons": [],
+                }
+            ]
+        )
+
+    monkeypatch.setattr(engine, "run_bot", _fake_run_bot)
+
+    case = Case(
+        schema_version=1,
+        id="multi-test",
+        title="Multi-user test",
+        source="./bots/botkit-bookingbot",
+        builder="legacy",
+        actors={"client": Actor(user_id=1001)},
+        chat=ChatSpec(type="group"),
+        steps=[
+            Step(send="/start", **{"as": "client"}, expect=Expect(silent=True)),
+        ],
+    )
+
+    engine.run_case(
+        case, bot_dir=tmp_path / "bot", cache_dir=tmp_path / "envs", work_dir=tmp_path / ".work"
+    )
+
+    steps = calls.get("steps")
+    assert steps is not None
+    assert len(steps) == 1
+    assert steps[0].get("as") == "client"
