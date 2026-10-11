@@ -1,0 +1,88 @@
+name: Mutation
+
+# Мутационное тестирование (ТЗ, B4). Отдельный workflow, а не шаг в CI:
+# прогон поднимает окружение и крутит pytest сотни раз, и смешивать его с
+# обычными проверками неправильно — он падает по своему, отдельному поводу.
+#
+# Поводов запускаться три, и все они дешёвые: полный прогон 442 мутантов
+# занимает ~35 секунд на четырёх ядрах, так что фильтровать по изменённым
+# файлам незачем — каждый PR проверяет порог целиком. Ночью запускается
+# дополнительно, потому что ТЗ просит ночной job: он ловит то, что не
+# ловится на PR, — например, смену версии pytest или покрытия.
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+  pull_request:
+  push:
+    branches: [main]
+
+# Права минимальные: workflow только читает код и запускает тесты.
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  mutmut:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Установить зависимости
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      # mutmut сам начинает прогон с «forced fail test»: если тесты не падают на
+      # заведомо испорченном раннере, ни один мутант не будет убит — и отчёт
+      # о нуле окажется пустым. Отдельный шаг для этого не нужен.
+      - name: Мутационное тестирование
+        # Модули и порог — в [tool.mutmut] файла pyproject.toml.
+        run: mutmut run --max-children 4
+
+      - name: Статистика для артефакта
+        run: mutmut export-cicd-stats
+
+      - name: "Порог: выживших мутантов 0"
+        # ТЗ, B4: столько тестов не пишут, сколько нужно, чтобы поймать
+        # конкретную мутацию. Ноль выживших — и есть доказательство, что
+        # проверки в тестах действительно проверяют поведение.
+        run: |
+          python - <<'PY'
+          import json, pathlib, sys
+          stats = json.loads(pathlib.Path("mutants/mutmut-cicd-stats.json").read_text())
+          print(json.dumps(stats, ensure_ascii=False, indent=2))
+          bad = {k: v for k, v in stats.items() if v and k in ("survived", "timeout", "segfault")}
+          if bad:
+              print(f"порог не выполнен: {bad}", file=sys.stderr)
+          sys.exit(1 if bad else 0)
+          PY
+
+      - name: Выжившие мутанты (человекочитаемо)
+        if: failure()
+        run: mutmut results
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          # Артефакт — часть критерия приёмки B4: по нему видно, что порог
+          # проверялся, даже когда зелёный.
+          name: mutation-stats
+          path: mutants/mutmut-cicd-stats.json
+          if-no-files-found: warn
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: mutation-diff
+          path: mutants/
+          if-no-files-found: warn

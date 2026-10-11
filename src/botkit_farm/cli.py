@@ -43,69 +43,17 @@ WORK_DIR = ROOT / ".work"
 
 
 async def _doctor() -> int:
-    """Проверить готовность стенда и сказать, что именно не так."""
-    ok = True
-    print("Проверка стенда botkit-farm\n")
+    """Проверить готовность стенда и сказать, что именно не так.
 
-    # 1. Токен
-    try:
-        security.assert_fake_token()
-        print("  ✅ нет настоящего токена Telegram в окружении")
-    except security.SecurityError as exc:
-        ok = False
-        print(f"  ❌ {exc}")
+    Разбор проверок живёт в botkit_farm.doctor: там же лежит и решение, что
+    считать блокером, а что ухудшением. Здесь только печать и код возврата —
+    блокеры дают 1, одни ухудшения оставляют прогон возможным.
+    """
+    from botkit_farm import doctor
 
-    # 2. Redis
-    try:
-        import redis.asyncio as aioredis
-
-        r = aioredis.from_url(REDIS_URL)
-        try:
-            await r.ping()
-            print(f"  ✅ Redis отвечает на {REDIS_URL}")
-        finally:
-            await r.aclose()
-    except Exception as exc:  # noqa: BLE001
-        ok = False
-        print(
-            f"  ❌ Redis недоступен на {REDIS_URL} ({type(exc).__name__}). "
-            f"Поднять: redis-server --port 6380 --daemonize yes"
-        )
-
-    # 3. Подложка кадра
-    from botkit_farm.render import _bg_assets
-
-    if _bg_assets():
-        print(f"  ✅ подложка кадра: {_bg_assets()[0].name}")
-    else:
-        print(
-            "  ⚠️  нет подложки assets/tg-bg.* — кадр в режиме window не снимется "
-            "(другие режимы работают)"
-        )
-
-    # 4. Playwright
-    try:
-        # Chromium проверяем в рабочем потоке: Playwright Sync API нельзя
-        # вызывать изнутри работающего event loop, а doctor — async. Ровно та
-        # же причина, по которой рендер уводится в to_thread в движке.
-        def _chromium_ok() -> None:
-            from playwright.sync_api import sync_playwright
-
-            with sync_playwright() as p:
-                p.chromium.launch().close()
-
-        await asyncio.to_thread(_chromium_ok)
-        print("  ✅ Chromium запускается")
-    except Exception as exc:  # noqa: BLE001
-        ok = False
-        print(
-            f"  ❌ Chromium не запускается ({type(exc).__name__}). "
-            f"Починить: python -m playwright install chromium"
-        )
-
-    print()
-    print("Готов к работе." if ok else "Есть блокеры — см. выше.")
-    return 0 if ok else 1
+    report = await doctor.run_checks(ROOT, redis_url=REDIS_URL)
+    print(doctor.format_report(report))
+    return 0 if report.ok else 1
 
 
 # ── study ───────────────────────────────────────────────────────────────────
