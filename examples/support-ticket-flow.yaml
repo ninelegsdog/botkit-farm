@@ -1,0 +1,68 @@
+# Кейс написан по коду botkit-support (поколение newgen) и фикстуры.
+#   botkit-farm study ./bots/botkit-support
+#
+#   /start             → support/handlers.py:25 «Здравствуйте! Чем можем помочь»
+#   «➕ Новый тикет»    → handlers.py:48 «Выберите категорию:» + 4 кнопки
+#   «🚚 Доставка»      → handlers.py:57 «Опишите проблему:»
+#   текст              → handlers.py:73 «Создать тикет?» + «✅ Создать»/«❌ Отмена»
+#   «✅ Создать»       → handlers.py:90 «Менеджер ответит в течение 30 минут»
+#   «📋 Мои тикеты»    → handlers.py:124 карточки: новый (new) и засеянный (closed)
+#
+# Нижнее меню — ReplyKeyboard, поэтому пункты меню это send, а не click.
+# Фикстура support сеет один закрытый тикет, поэтому в истории две карточки.
+
+schema_version: 1
+id: support-ticket-flow
+title: Создание тикета и история обращений
+description: >-
+  Клиент открывает бота поддержки, создаёт обращение в категории «Доставка»,
+  подтверждает его и видит в «Мои тикеты» свежую карточку со статусом new и
+  ранее закрытую из фикстуры. Ядро support-бота: без него обращения не принимаются.
+source: https://github.com/ninelegsdog/botkit-support
+builder: newgen
+fixture: support
+seed: true
+
+frame: window
+frame_title: SupportBot · поддержка
+frame_handle: "@SaasSupportKitBot"
+publishable: true
+
+tags: [smoke, regression]
+covers: support-flow
+
+steps:
+  - send: "/start"
+    expect:
+      text_contains: ["Здравствуйте! Чем можем помочь"]
+
+  - send: "➕ Новый тикет"
+    pause: 2.5
+    expect:
+      text_contains: ["Выберите категорию:"]
+      buttons_count: 4
+      buttons_contains: ["💳 Оплата", "🚚 Доставка", "🔧 Техника", "💬 Другое"]
+
+  - click: "🚚 Доставка"
+    pause: 2.5
+    expect:
+      text_contains: ["Опишите проблему:"]
+
+  - send: "Не приходит заказ №7743"
+    pause: 2.5
+    expect:
+      text_contains: ["Создать тикет?", "Категория: delivery"]
+      buttons_count: 2
+      buttons_contains: ["✅ Создать", "❌ Отмена"]
+
+  - click: "✅ Создать"
+    pause: 2.5
+    expect:
+      text_contains: ["Менеджер ответит в течение 30 минут"]
+
+  # История: новая карточка (new) и засеянная закрытая (closed).
+  - send: "📋 Мои тикеты"
+    pause: 2.5
+    expect:
+      text_contains: ["Курьер не привёз заказ №7742", "Статус: 🆕 new", "Статус: ✅ closed"]
+      buttons_contains: ["💬 Ответить", "✅ Закрыть"]

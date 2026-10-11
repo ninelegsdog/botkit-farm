@@ -1,0 +1,48 @@
+# Кейс написан по коду botkit-membership (поколение legacy).
+# Регресс к дефекту «всплывающие уведомления терялись» (obsidian/опыт/lessons, #4):
+# бот отвечает не сообщением, а всплывающим уведомлением (callback.answer).
+# Если ферма снова начнёт считать ответом только sendMessage/editMessageText,
+# кейс упадёт на «бот промолчал» — то есть ровно поймает регресс.
+#
+#   /start                     → handlers.py:48 «Выберите действие:»
+#   mem:my (👤 Моя подписка)    → handlers.py:171 карточка подписки + «❌ Отменить автопродление»
+#   mem:cancel (❌ Отменить)    → handlers.py:189 answer «Автопродление отменено.» (без edit)
+
+schema_version: 1
+id: membership-toast-autorenew
+title: Отмена автопродления — всплывающее уведомление
+description: >-
+  Участник с активной подпиской отменяет автопродление. Бот подтверждает не
+  сообщением, а всплывающим уведомлением. Кейс проверяет, что такое уведомление
+  попадает в отчёт как ответ, а не теряется.
+source: https://github.com/ninelegsdog/botkit-membership
+builder: legacy
+fixture: membership
+seed: true
+
+frame: window
+frame_title: MembershipBot · подписка
+frame_handle: "@MembershipKitBot"
+publishable: true
+
+tags: [regression, edge]
+covers: membership-flow
+
+steps:
+  - send: "/start"
+    expect:
+      text_contains: ["Выберите действие:"]
+      buttons_contains: ["👤 Моя подписка"]
+
+  # Фикстура сеет активную подписку с auto_renew=1, поэтому кнопка отмены есть.
+  - click: "👤 Моя подписка"
+    pause: 2.5
+    expect:
+      text_contains: ["Подписка:"]
+      buttons_contains: ["❌ Отменить автопродление"]
+
+  # Единственный ответ шага — всплывающее уведомление (edit_text не вызывается).
+  - click: "❌ Отменить автопродление"
+    pause: 2.5
+    expect:
+      text_contains: ["Автопродление отменено"]

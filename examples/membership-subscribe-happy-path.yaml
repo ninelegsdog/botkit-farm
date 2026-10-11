@@ -1,0 +1,60 @@
+# Кейс написан по коду botkit-membership (поколение legacy, как booking).
+#   botkit-farm study ./bots/botkit-membership
+#
+#   /start                 → membership/handlers.py:48 «Выберите действие:» + 4 кнопки
+#   mem:plans (⭐ Тарифы)   → handlers.py:68 edit «Выберите тариф:» + 3 тарифа
+#   mem:plan:1 (тариф)     → handlers.py:80 edit «Оформить подписку?» + Оформить/Назад
+#   mem:subscribe:1 (✅)   → handlers.py:108 answer «Подписка оформлена!»
+#
+# Тарифы приходят из фикстуры membership; подписи — f"{name} — {price}₽ / {days} дн."
+# (handlers.py:61), данные отсортированы по цене (service.py:11).
+
+schema_version: 1
+id: membership-subscribe-happy-path
+title: Оформление подписки — полный путь
+description: >-
+  Участник открывает бота, смотрит тарифы, выбирает месячный и оформляет
+  подписку. Это монетизационное ядро клуба: без него подписки не продаются.
+source: https://github.com/ninelegsdog/botkit-membership
+builder: legacy
+fixture: membership
+seed: true
+
+frame: window
+frame_title: MembershipBot · клуб
+frame_handle: "@MembershipKitBot"
+publishable: true
+
+tags: [smoke, regression]
+covers: membership-flow
+
+steps:
+  - send: "/start"
+    expect:
+      text_contains: ["Выберите действие:"]
+      buttons_contains: ["⭐ Тарифы", "📚 Контент", "📊 Опросы", "👤 Моя подписка"]
+      buttons_count: 4
+
+  - click: "⭐ Тарифы"
+    pause: 2.5
+    expect:
+      text_contains: ["Выберите тариф:"]
+      buttons_contains:
+        - "Месячный — 590₽ / 30 дн."
+        - "Квартальный — 1590₽ / 90 дн."
+        - "Годовой — 4990₽ / 365 дн."
+      buttons_count: 3
+
+  # Карточка тарифа: здесь единица «дней», в списке — «дн.», это разные строки.
+  - click: "Месячный — 590₽ / 30 дн."
+    pause: 2.5
+    expect:
+      text_contains: ["Месячный", "590₽ / 30 дней", "Оформить подписку?"]
+      buttons_contains: ["✅ Оформить", "🔙 Назад"]
+      buttons_count: 2
+
+  # Оформление: бот отвечает всплывающим уведомлением (handlers.py:108).
+  - click: "✅ Оформить"
+    pause: 2.5
+    expect:
+      text_contains: ["Подписка оформлена!"]

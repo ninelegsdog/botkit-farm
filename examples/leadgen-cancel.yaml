@@ -1,0 +1,58 @@
+# Кейс написан по коду botkit-leadgen (поколение newgen).
+# Ветка отмены: клиент доводит заявку до подтверждения и отменяет её.
+#
+#   lead_svc:audit    → handlers.py:54 «Как вас зовут?»
+#   «Мария»           → handlers.py:61 «Телефон (+71234567890)»
+#   «+79990001122»    → handlers.py:71 «Подтвердите заявку:» + «❌ Отмена»
+#   lead_cancel       → handlers.py:131 «Заявка отменена.»
+
+schema_version: 1
+id: leadgen-cancel
+title: Заявка в LeadGen — отмена после ввода данных
+description: >-
+  Клиент доходит до подтверждения заявки и отменяет её. Проверяет, что отмена
+  на последнем шаге возвращает бота в исходное состояние и не создаёт заявку.
+source: https://github.com/ninelegsdog/botkit-leadgen
+builder: newgen
+fixture: leadgen
+seed: true
+
+frame: window
+frame_title: LeadGenBot · заявки
+frame_handle: "@LeadgenKitBot"
+publishable: true
+
+tags: [regression, edge]
+covers: leadgen-flow
+
+steps:
+  - send: "/start"
+    expect:
+      text_contains: ["Оставьте заявку"]
+
+  - send: "📝 Оставить заявку"
+    pause: 2.5
+    expect:
+      text_contains: ["Что вас интересует"]
+      buttons_contains: ["Аудит отдела продаж"]
+
+  - click: "Аудит отдела продаж"
+    pause: 2.5
+    expect:
+      text_contains: ["Как вас зовут"]
+
+  - send: "Мария"
+    pause: 2.5
+    expect:
+      text_contains: ["Телефон"]
+
+  - send: "+79990001122"
+    pause: 2.5
+    expect:
+      text_contains: ["Подтвердите заявку:", "Интерес: audit"]
+      buttons_contains: ["✅ Отправить", "❌ Отмена"]
+
+  - click: "❌ Отмена"
+    pause: 2.5
+    expect:
+      text_contains: ["Заявка отменена"]

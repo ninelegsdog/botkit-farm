@@ -139,3 +139,37 @@ def test_origin_берётся_из_каталога_пака(tmp_path):
     path = case_dir / "p.yaml"
     path.write_text(body, encoding="utf-8")
     assert load_file(path).origin == "manual"
+
+
+# ── импорт пакета не тянет зависимости фермы ──────────────────────────────────
+
+
+def test_импорт_бота_пакета_не_тянет_yaml():
+    """`import botkit_farm` не должен импортировать `yaml`.
+
+    Этот импорт выполняется и в процессе бота (host.py), где установлены только
+    зависимости бота. Ранний реэкспорт пака тянул `yaml`, и любой запуск падал
+    на импорте — до кода бота. Проверяем в подпроцессе: в текущем процессе yaml
+    уже мог быть загружен другими тестами.
+    """
+    import subprocess
+    import sys
+
+    src = pathlib.Path(__file__).resolve().parents[1] / "src"
+    code = "import sys, botkit_farm; sys.exit(1 if 'yaml' in sys.modules else 0)"
+    proc = subprocess.run(  # noqa: S603 — аргументы фиксированы, ввод не участвует
+        [sys.executable, "-c", code],
+        env={"PYTHONPATH": str(src), "PATH": "/usr/bin:/bin"},
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert proc.returncode == 0, proc.stderr
+
+
+def test_реэкспорт_пака_доступен_лениво():
+    """Имена пака остаются доступны через пакет, но без раннего импорта."""
+    import botkit_farm
+
+    assert botkit_farm.load_pack is load_pack
+    assert botkit_farm.Manifest is Manifest

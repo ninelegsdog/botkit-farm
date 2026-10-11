@@ -1,0 +1,68 @@
+# Кейс написан по коду botkit-leadgen (поколение newgen).
+#   botkit-farm study ./bots/botkit-leadgen
+#
+#   /start               → leadgen/handlers.py:24 приветствие + reply-меню
+#   «📝 Оставить заявку»  → handlers.py:42 «Что вас интересуете?» + 3 inline-кнопки услуг
+#   lead_svc:<key>       → handlers.py:54 «Как вас зовут?»
+#   имя                  → handlers.py:61 «Телефон (+71234567890)»
+#   телефон              → handlers.py:71 «Подтвердите заявку:» + «✅ Отправить»/«❌ Отмена»
+#   lead_confirm         → handlers.py:102 «Заявка отправлена»
+#
+# «📝 Оставить заявку» — текстовая кнопка reply-меню, поэтому send.
+# Состав услуг задаёт фикстура leadgen.
+
+schema_version: 1
+id: leadgen-happy-path
+title: Заявка в LeadGen — полный путь клиента
+description: >-
+  Клиент открывает бота, выбирает услугу, вводит имя и телефон, подтверждает
+  заявку и получает подтверждение отправки. Это ядро лидгена: без него бот не
+  собирает ни одной заявки.
+source: https://github.com/ninelegsdog/botkit-leadgen
+builder: newgen
+fixture: leadgen
+seed: true
+
+frame: window
+frame_title: LeadGenBot · заявки
+frame_handle: "@LeadgenKitBot"
+publishable: true
+
+tags: [smoke, regression]
+covers: leadgen-flow
+
+steps:
+  - send: "/start"
+    expect:
+      text_contains: ["Оставьте заявку"]
+
+  # Услуги: inline-кнопки, состав задаёт фикстура (fixtures/leadgen.py).
+  - send: "📝 Оставить заявку"
+    pause: 2.5
+    expect:
+      text_contains: ["Что вас интересует"]
+      buttons_count: 3
+      buttons_contains: ["Лендинг под ключ", "Чат-бот для отдела продаж", "Аудит отдела продаж"]
+
+  # Выбор услуги: edit_text «Как вас зовут?» (handlers.py:54).
+  - click: "Лендинг под ключ"
+    pause: 2.5
+    expect:
+      text_contains: ["Как вас зовут"]
+
+  - send: "Иван Тест"
+    pause: 2.5
+    expect:
+      text_contains: ["Телефон"]
+
+  # Телефон валиден (+7 и 12 символов) — бот показывает подтверждение.
+  - send: "+71234567890"
+    pause: 2.5
+    expect:
+      text_contains: ["Подтвердите заявку:", "Интерес: landing"]
+      buttons_contains: ["✅ Отправить", "❌ Отмена"]
+
+  - click: "✅ Отправить"
+    pause: 2.5
+    expect:
+      text_contains: ["Заявка отправлена"]

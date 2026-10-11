@@ -17,7 +17,7 @@ description: >-
   Клиент открывает магазин, заходит в каталог, выбирает категорию, добавляет
   товар в корзину. Это ядро торгового бота: если этот путь не работает,
   магазин не продаёт ничего.
-source: ./bots/botkit-store
+source: https://github.com/ninelegsdog/botkit-store
 builder: newgen
 fixture: store
 

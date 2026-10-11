@@ -1,9 +1,10 @@
-"""CLI фермы: study, run, list, doctor, init, migrate.
+"""CLI фермы: study, run, list, doctor, init, migrate, catalog.
 
-Один вход, шесть команд, и каждая отвечает на один вопрос владельца:
+Один вход, семь команд, и каждая отвечает на один вопрос владельца:
 `study` — «что этот бот умеет», `list` — «какие кейсы есть», `run` — «работает
 ли бот», `doctor` — «почему не работает стенд», `init` — «как завести кейсы
-рядом с ботом», `migrate` — «схема кейсов ещё та, что мы ждём».
+рядом с ботом», `migrate` — «схема кейсов ещё та, что мы ждём», `catalog` —
+«целы ли регрессы, которыми мы обещаем ловить возвраты».
 
 Про `doctor` отдельно: почти каждая «ферма не работает» — это не баг, а
 неподнятый Redis или отсутствующая подложка. Диагностика, которая называет
@@ -33,6 +34,7 @@ ROOT = pathlib.Path(__file__).resolve().parents[2]
 # системному redis на 6379.
 REDIS_URL = os.environ.get("BOTKIT_FARM_REDIS", "redis://127.0.0.1:6380/0")
 CASES_DIR = ROOT / "cases"
+EXAMPLES_DIR = ROOT / "examples"
 BOTS_DIR = ROOT / "bots"
 REPORTS_DIR = ROOT / "reports"
 ENVS_DIR = ROOT / "envs"
@@ -180,6 +182,52 @@ def _migrate(target: str, check: bool) -> int:
         return 1 if (stale or errored) else 0
     print(f"проверено {len(paths)}: обновлено {changed}, ошибок {errored}")
     return 1 if errored else 0
+
+
+# ── catalog ─────────────────────────────────────────────────────────────────
+
+
+def _catalog(target: str, check: bool) -> int:
+    """Показать каталог регрессов и проверить его целостность.
+
+    `--check` — шаг CI: манифест и файлы обязаны сойтись в обе стороны. Кейс,
+    который удалили из каталога, но забыли в манифесте, — это регресс, о котором
+    думают, что он есть. Проверка называет и то, и другое.
+    """
+    from botkit_farm import catalog as catalog_mod
+
+    root = pathlib.Path(target).expanduser()
+    if not root.exists():
+        print(f"каталог не найден: {root}")
+        return 2
+
+    problems = catalog_mod.check(root)
+    try:
+        cat = catalog_mod.load(root)
+    except catalog_mod.CatalogError:
+        cat = None
+
+    if check:
+        for p in problems:
+            print(f"  ✗ {p}")
+        if problems:
+            print(f"каталог не цел: {len(problems)} проблем(ы)")
+            return 1
+        if cat is not None:
+            print(f"каталог цел: {len(cat.regressions)} регрессов в {root}")
+        return 0
+
+    if cat is None:
+        for p in problems:
+            print(f"  ✗ {p}")
+        return 1
+    print(f"Регрессов в каталоге: {len(cat.regressions)} ({root})")
+    for e in cat.regressions:
+        print(f"  • {e.id:32} {e.case}")
+        print(f"    зачем: {e.why}")
+    for p in problems:
+        print(f"  ⚠️  {p}")
+    return 1 if problems else 0
 
 
 # ── list ────────────────────────────────────────────────────────────────────
@@ -399,6 +447,17 @@ def main(argv: list[str] | None = None) -> int:
     )
     p_migrate.set_defaults(fn=None)
 
+    p_catalog = sub.add_parser("catalog", help="показать и проверить каталог регрессов")
+    p_catalog.add_argument(
+        "target", nargs="?", default=str(EXAMPLES_DIR), help="каталог с манифестом catalog.json"
+    )
+    p_catalog.add_argument(
+        "--check",
+        action="store_true",
+        help="ничего не печатать лишнего, упасть при разрыве (для CI)",
+    )
+    p_catalog.set_defaults(fn=None)
+
     args = ap.parse_args(argv)
     try:
         if args.cmd == "doctor":
@@ -411,6 +470,8 @@ def main(argv: list[str] | None = None) -> int:
             return _init(args.target, args.builder)
         if args.cmd == "migrate":
             return _migrate(args.target, args.check)
+        if args.cmd == "catalog":
+            return _catalog(args.target, args.check)
         return asyncio.run(_run(args))
     except KeyboardInterrupt:
         print("\nпрервано")

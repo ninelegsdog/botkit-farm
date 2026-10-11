@@ -1,0 +1,89 @@
+# Кейс написан по коду botkit-delivery (поколение newgen).
+#   botkit-farm study ./bots/botkit-delivery
+#
+#   /start                    → delivery/handlers.py:23 «📦 Отслеживание заказов и доставок!»
+#   текст «🔍 Проверить заказ» → delivery/handlers.py:30 «🔍 Введите номер заказа:»
+#   текст «DL-2041»           → delivery/handlers.py:56-59 карточка заказа + кнопки слежения
+#   /admin                    → admin/handlers.py:25 «🔑 Введите пароль:»
+#   текст «farm»              → admin/handlers.py:31 «✅ Добро пожаловать!»
+#   текст «📦 Заказы»         → admin/handlers.py:116-134 карточка + «▶️ Следующий»/«✅ Закрыть»
+#   next:<id>                 → admin/handlers.py:160 «✅ Статус обновлён: Готов»
+#
+# «🔍 Проверить заказ» и «📦 Заказы» — кнопки НИЖНЕЙ клавиатуры (core/nav.py),
+# а не inline, поэтому это send, а не click.
+
+schema_version: 1
+id: delivery-order-status
+title: Проверка заказа клиентом и смена статуса оператором
+description: >-
+  Клиент находит свой заказ по номеру и видит статус, затем оператор переводит
+  заказ в следующий статус, а клиент видит обновление. Это ядро бота доставки:
+  заказ находится по номеру, а конечный автомат статусов двигает доставку.
+source: https://github.com/ninelegsdog/botkit-delivery
+builder: newgen
+fixture: delivery
+
+# Фикстура сеет заказ DL-2041 в статусе «В работе» (fixtures/delivery.py).
+seed: true
+
+frame: window
+frame_title: DeliveryBot · доставка
+frame_handle: "@DeliveryKitBot"
+publishable: true
+
+tags: [smoke, regression]
+covers: delivery-flow
+
+steps:
+  # Старт: приветствие (delivery/handlers.py:23). Меню — reply-клавиатура.
+  - send: "/start"
+    expect:
+      text_contains: ["Отслеживание заказов и доставок"]
+
+  # «🔍 Проверить заказ» — кнопка нижней клавиатуры (core/nav.py:9), шлём текстом.
+  - send: "🔍 Проверить заказ"
+    expect:
+      text_contains: ["Введите номер заказа"]
+
+  # Номер из фикстуры (fixtures/delivery.py): даты истории динамические,
+  # поэтому проверяем только стабильные части карточки.
+  - send: "DL-2041"
+    pause: 2.5
+    expect:
+      text_contains: ["Заказ #DL-2041", "Демонстрационная посылка", "Статус: В работе"]
+      buttons_count: 2
+      buttons_contains: ["🔔 Следить", "🔕 Не следить"]
+
+  # Админка: пароль «farm» задан стендом.
+  - send: "/admin"
+    expect:
+      text_contains: ["Введите пароль"]
+
+  - send: "farm"
+    pause: 2.5
+    expect:
+      text_contains: ["Добро пожаловать"]
+
+  # Список заказов: карточка (core/ui.py) + кнопки next/close (admin/handlers.py:129-130).
+  - send: "📦 Заказы"
+    pause: 2.5
+    expect:
+      text_contains: ["Заказ #DL-2041"]
+      buttons_contains: ["▶️ Следующий", "✅ Закрыть"]
+
+  # Смена статуса «В работе» → «Готов». Ответ — edit_text (admin/handlers.py:160);
+  # callback.answer() без текста, всплывающего уведомления нет.
+  - click: "▶️ Следующий"
+    pause: 2.5
+    expect:
+      text_contains: ["Статус обновлён", "Готов"]
+
+  # Убеждаемся, что смена статуса сохранилась: клиент видит «Готов».
+  - send: "🔍 Проверить заказ"
+    expect:
+      text_contains: ["Введите номер заказа"]
+
+  - send: "DL-2041"
+    pause: 2.5
+    expect:
+      text_contains: ["Статус: Готов"]

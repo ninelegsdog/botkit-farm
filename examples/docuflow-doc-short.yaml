@@ -1,0 +1,63 @@
+# Кейс написан по коду botkit-docuflow (поколение newgen).
+# Короткий путь: шаблон с одним полем проверяет ветку формы с минимальным вводом.
+#
+#   /start                 → handlers.py:40 «Генерация документов в Telegram»
+#   «📄 Создать документ»  → handlers.py:57 «Выберите категорию:»
+#   «Справки»              → handlers.py:75 «Выберите шаблон:»
+#   «Справка об обучении»  → handlers.py:96 «📝 Поле 1/1: ФИО обучающегося»
+#   «Иван П.»              → handlers.py:131 «📋 Проверьте данные:»
+#   «✅ Сформировать»      → handlers.py:183 «Документ сформирован» + sendDocument
+
+schema_version: 1
+id: docuflow-doc-short
+title: Генерация документа с одним полем — короткий путь
+description: >-
+  Клиент выбирает шаблон «Справка об обучении» с единственным полем, заполняет
+  его и получает PDF. Проверяет путь документа с минимальным вводом: ветку, где
+  после первого же поля наступает подтверждение.
+source: https://github.com/ninelegsdog/botkit-docuflow
+builder: newgen
+fixture: docuflow
+seed: true
+
+frame: window
+frame_title: DocuFlow · справка
+frame_handle: "@DocuflowKitBot"
+publishable: true
+
+tags: [regression, ui]
+covers: docuflow-generate
+
+steps:
+  - send: "/start"
+    expect:
+      text_contains: ["Генерация документов в Telegram"]
+
+  - send: "📄 Создать документ"
+    pause: 2.5
+    expect:
+      text_contains: ["Выберите категорию:"]
+      buttons_contains: ["Справки"]
+
+  - click: "Справки"
+    pause: 2.5
+    expect:
+      text_contains: ["Выберите шаблон:"]
+      buttons_contains: ["Справка об обучении"]
+
+  # Ровно одно поле: после него сразу подтверждение (handlers.py:96-142).
+  - click: "Справка об обучении"
+    pause: 2.5
+    expect:
+      text_contains: ["Поле 1/1:", "ФИО обучающегося"]
+
+  - send: "Иван П."
+    pause: 2.5
+    expect:
+      text_contains: ["Проверьте данные:", "ФИО обучающегося"]
+      buttons_contains: ["✅ Сформировать"]
+
+  - click: "✅ Сформировать"
+    pause: 2.5
+    expect:
+      text_contains: ["Документ сформирован"]

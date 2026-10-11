@@ -1,0 +1,72 @@
+# Кейс написан по коду botkit-reminder. Поколение своё — builder задан явно:
+# автодетектор reminder не распознаёт (нет src/app.py и create_app/build_dispatcher).
+#
+#   /start                 → reminder/handlers.py:38 приветствие + нижнее меню
+#   «➕ Добавить»           → handlers.py:91 «Выберите тип напоминания:» + 2 кнопки
+#   «🔸 Одноразовое»        → handlers.py:97 «Введите текст напоминания:»
+#   текст                  → handlers.py:129 «Введите дату в формате ДД.ММ.ГГГГ»
+#   дата                   → handlers.py:142 «Введите время ЧЧ:ММ»
+#   время                  → handlers.py:182 «Напоминание создано»
+#   «⏰ Мои напоминания»    → handlers.py:207 список напоминаний
+#
+# «➕ Добавить» и «⏰ Мои напоминания» — текстовые кнопки reply-меню, поэтому send.
+# Фикстура reminder уже положила одно напоминание, поэтому список показывает две записи.
+
+schema_version: 1
+id: reminder-create-and-list
+title: Создание напоминания и список «Мои напоминания»
+description: >-
+  Клиент открывает ReminderBot, создаёт одноразовое напоминание (тип, текст,
+  дата, время) и открывает список. Фикстура уже положила одно напоминание,
+  поэтому список обязан показать обе записи.
+source: https://github.com/ninelegsdog/botkit-reminder
+builder: reminder
+fixture: reminder
+seed: true
+
+frame: window
+frame_title: ReminderBot · напоминания
+frame_handle: "@ReminderKitBot"
+publishable: true
+
+tags: [smoke, regression]
+covers: reminder-flow
+
+steps:
+  - send: "/start"
+    expect:
+      text_contains: ["Подпишитесь на напоминания"]
+
+  - send: "➕ Добавить"
+    pause: 2.5
+    expect:
+      text_contains: ["Выберите тип напоминания:"]
+      buttons_count: 2
+      buttons_contains: ["🔸 Одноразовое", "🔁 Повторяющееся"]
+
+  - click: "🔸 Одноразовое"
+    pause: 2.5
+    expect:
+      text_contains: ["Введите текст напоминания:"]
+
+  - send: "Оплатить интернет"
+    pause: 2.5
+    expect:
+      text_contains: ["Введите дату"]
+
+  - send: "31.12.2026"
+    pause: 2.5
+    expect:
+      text_contains: ["Введите время"]
+
+  - send: "09:30"
+    pause: 2.5
+    expect:
+      text_contains: ["Напоминание создано"]
+
+  # Список: новое напоминание и засеянное фикстурой. Порядок не проверяем,
+  # сверяем подстроки обеих записей.
+  - send: "⏰ Мои напоминания"
+    pause: 2.5
+    expect:
+      text_contains: ["Оплатить интернет", "Позвонить по закаку №7742"]

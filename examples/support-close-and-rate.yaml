@@ -1,0 +1,56 @@
+# Кейс написан по коду botkit-support (поколение newgen) и фикстуры.
+# Ветка закрытия и оценки: интерактивный путь из нескольких callback подряд,
+# где каждый следующий шаг зависит от предыдущего (кнопки появляются после ответа).
+#
+#   «📋 Мои тикеты» → handlers.py:124 карточка засеянного тикета + «✅ Закрыть»
+#   «✅ Закрыть»    → handlers.py:222 «Закрыть тикет?» + «✅ Да»/«❌ Нет»
+#   «✅ Да»         → handlers.py:231 «Тикет закрыт.» + «Оцените качество:» + ⭐1..⭐5
+#   «⭐5»           → handlers.py:263 «Спасибо за оценку»
+
+schema_version: 1
+id: support-close-and-rate
+title: Закрытие тикета и оценка качества
+description: >-
+  Клиент открывает историю, закрывает тикет через подтверждение и ставит оценку.
+  Проверяет цепочку зависимых inline-кнопок: подписи следующего шага появляются
+  только в ответе предыдущего, и кейс идёт по ним, а не по зашитым данным.
+source: https://github.com/ninelegsdog/botkit-support
+builder: newgen
+fixture: support
+seed: true
+
+frame: window
+frame_title: SupportBot · поддержка
+frame_handle: "@SaasSupportKitBot"
+publishable: true
+
+tags: [regression, ui]
+covers: support-flow
+
+steps:
+  - send: "/start"
+    expect:
+      text_contains: ["Здравствуйте! Чем можем помочь"]
+
+  - send: "📋 Мои тикеты"
+    pause: 2.5
+    expect:
+      text_contains: ["Курьер не привёз заказ №7742"]
+      buttons_contains: ["✅ Закрыть"]
+
+  - click: "✅ Закрыть"
+    pause: 2.5
+    expect:
+      text_contains: ["Закрыть тикет?"]
+      buttons_contains: ["✅ Да", "❌ Нет"]
+
+  - click: "✅ Да"
+    pause: 2.5
+    expect:
+      text_contains: ["Тикет закрыт"]
+      buttons_contains: ["⭐5"]
+
+  - click: "⭐5"
+    pause: 2.5
+    expect:
+      text_contains: ["Спасибо за оценку"]

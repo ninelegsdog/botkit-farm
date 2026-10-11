@@ -1,0 +1,83 @@
+# Кейс написан по коду botkit-docuflow (поколение newgen).
+#   botkit-farm study ./bots/botkit-docuflow
+#
+#   /start                   → docuflow/handlers.py:40 «Генерация документов в Telegram»
+#   «📄 Создать документ»    → handlers.py:57 «Выберите категорию:» + кнопки категорий
+#   «Договоры»               → handlers.py:75 «Выберите шаблон:» + шаблон
+#   «Договор оказания услуг» → handlers.py:96 «📝 Поле 1/2: Наименование исполнителя»
+#   «ООО «Ромашка»»          → handlers.py:148 «📝 Поле 2/2: Стоимость по договору»
+#   «45000»                  → handlers.py:131 «📋 Проверьте данные:» + Сформировать/Исправить
+#   «✅ Сформировать»        → handlers.py:183 «Документ сформирован» + sendDocument
+#   «🗂 Мои документы»       → handlers.py:205 «Договор оказания услуг»
+#
+# «📄 Создать документ» и «🗂 Мои документы» — текстовые кнопки reply-меню
+# (core/nav.py), поэтому это send, а не click.
+
+schema_version: 1
+id: docuflow-doc-generate
+title: Генерация документа — полный путь
+description: >-
+  Клиент открывает бота, выбирает категорию и шаблон, заполняет поля формы,
+  подтверждает данные и получает готовый PDF. Это ядро документооборотного
+  бота: без него бот не выдаёт ни одного документа.
+source: https://github.com/ninelegsdog/botkit-docuflow
+builder: newgen
+fixture: docuflow
+
+# Фикстура сеет два шаблона и их поля (fixtures/docuflow.py).
+seed: true
+
+frame: window
+frame_title: DocuFlow · документы
+frame_handle: "@DocuflowKitBot"
+publishable: true
+
+tags: [smoke, ui]
+covers: docuflow-generate
+
+steps:
+  - send: "/start"
+    expect:
+      text_contains: ["Генерация документов в Telegram"]
+
+  # Категории: «Договоры», «Справки» (fixtures/docuflow.py).
+  - send: "📄 Создать документ"
+    pause: 2.5
+    expect:
+      text_contains: ["Выберите категорию:"]
+      buttons_contains: ["Договоры", "Справки"]
+
+  - click: "Договоры"
+    pause: 2.5
+    expect:
+      text_contains: ["Выберите шаблон:"]
+      buttons_contains: ["Договор оказания услуг"]
+
+  - click: "Договор оказания услуг"
+    pause: 2.5
+    expect:
+      text_contains: ["Поле 1/2:", "Наименование исполнителя"]
+
+  # Поле 1 — значение из примера фикстуры (fixtures/docuflow.py).
+  - send: "ООО «Ромашка»"
+    pause: 2.5
+    expect:
+      text_contains: ["Поле 2/2:", "Стоимость по договору"]
+
+  # Поле 2 — число; после него сводка и кнопки подтверждения.
+  - send: "45000"
+    pause: 2.5
+    expect:
+      text_contains: ["Проверьте данные:", "Наименование исполнителя", "Стоимость по договору"]
+      buttons_contains: ["✅ Сформировать", "✏️ Исправить"]
+
+  # Подтверждение: edit «Документ сформирован» и отдельно sendDocument.
+  - click: "✅ Сформировать"
+    pause: 2.5
+    expect:
+      text_contains: ["Документ сформирован"]
+
+  - send: "🗂 Мои документы"
+    pause: 2.5
+    expect:
+      text_contains: ["Договор оказания услуг"]

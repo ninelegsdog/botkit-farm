@@ -1,0 +1,60 @@
+# Кейс написан по коду botkit-pricesentry (поколение newgen) и фикстуры.
+#   botkit-farm study ./bots/botkit-pricesentry
+#
+#   /start                  → pricesentry/handlers.py:23 «Мониторинг цен на маркетплейсах»
+#   «📦 Мои товары»         → handlers.py:121 карточка товара + «📊 История»/«❌ Удалить»
+#   hist:<id>               → handlers.py:139 «📊 История цен:»
+#   «🔔 Мои уведомления»    → handlers.py:182 уведомление о снижении цены
+#   «📊 Статистика»         → handlers.py:191 «Ваши товары: 1»
+#
+# Все пункты — текстовые кнопки reply-меню (core/nav.py), поэтому send.
+# Планировщик price_check_loop на стенде не запускается (newgen-адаптер его не
+# поднимает): цены и уведомление — ровно те, что сеет фикстура.
+
+schema_version: 1
+id: pricesentry-saved-item-history
+title: PriceSentry — карточка товара, история цен и уведомление
+description: >-
+  Клиент открывает бота, смотрит отслеживаемый товар, пролистывает историю цен
+  и проверяет уведомление о снижении. Это ядро мониторинга: без него бот не
+  показывает ничего, ради чего его ставят.
+source: https://github.com/ninelegsdog/botkit-pricesentry
+builder: newgen
+fixture: pricesentry
+seed: true
+
+frame: window
+frame_title: PriceSentry · мониторинг цен
+frame_handle: "@PricesentryKitBot"
+publishable: true
+
+tags: [smoke, regression]
+covers: pricesentry-flow
+
+steps:
+  - send: "/start"
+    expect:
+      text_contains: ["Мониторинг цен"]
+
+  # «📦 Мои товары» — текстовая кнопка reply-меню; бот шлёт карточку товара.
+  - send: "📦 Мои товары"
+    pause: 2.5
+    expect:
+      text_contains: ["Кроссовки Runner Lite", "Текущая: 4990.00"]
+      buttons_contains: ["📊 История", "❌ Удалить"]
+
+  # История: бот заменяет карточку ответом со списком цен (limit 5).
+  - click: "📊 История"
+    pause: 2.5
+    expect:
+      text_contains: ["История цен:", "4990.00"]
+
+  - send: "🔔 Мои уведомления"
+    pause: 2.5
+    expect:
+      text_contains: ["Цена снизилась", "5490.00 → 4990.00"]
+
+  - send: "📊 Статистика"
+    pause: 2.5
+    expect:
+      text_contains: ["Ваши товары: 1"]
