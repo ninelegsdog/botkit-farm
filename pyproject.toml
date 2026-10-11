@@ -11,6 +11,22 @@ requires-python = ">=3.11"
 license = { text = "MIT" }
 authors = [{ name = "ninelegsdog" }]
 keywords = ["telegram", "bot", "testing", "scenarios", "screenshots"]
+# Классификаторы — не украшение: по ним PyPI фильтрует пакет, а «3.11/3.12/3.13»
+# обязаны совпадать с матрицей CI (ТЗ D2), иначе пакет обещает то, что не
+# проверено. Лицензия дублируется полем `license` выше.
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: Console",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: MIT License",
+  "Natural Language :: Russian",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Software Development :: Testing",
+  "Topic :: Software Development :: Testing :: Acceptance",
+]
 
 # Версии зафиксированы ровно те, что работают в проде стенда: aiogram 3.x,
 # playwright 1.x и pillow 12.x — проверенная связка. Нижняя граница «>=» стоит

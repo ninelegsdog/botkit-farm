@@ -1,0 +1,126 @@
+name: Release
+
+# Публикация на PyPI по тегу (ТЗ D3). Порядок: тег → релиз → публикация.
+#
+# Токена в репозитории нет и не нужно: trusted publishing — PyPI выдаёт
+# краткоживущий OIDC-токен прямо на этот workflow, у которого в правах стоит
+# `id-token: write`. Поэтому секрет нельзя ни утащить из репозитория, ни
+# протухнуть в 2027 году.
+#
+# Что нужно настроить один раз на стороне PyPI (Project → Publishing → Add a
+# new publisher → GitHub):
+#   PyPI project name — botkit-farm
+#   Owner             — аккаунт владельца пакета
+#   Repository        — адрес этого репозитория
+#   Workflow name     — release.yml   ← имя файла обязано совпадать с этим
+#   Environment       — оставить пустым, если не заводили окружение
+on:
+  push:
+    tags: ["v*"]
+  # Перезапуск после упавшей публикации: в интерфейсе выбирается тот же тег,
+  # а версия в pyproject по-прежнему обязана совпасть с ним.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  # Публикацию нельзя отменять на середине: два процесса, грузящие один файл на
+  # PyPI, всё равно не сойдутся, а оборванная половина хуже, чем дождаться
+  # конца. cancel-in-progress у обычного CI здесь был бы ошибкой.
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    # Раскомментировать, если перед публикацией нужен ручной допуск. Тогда же
+    # имя окружения вписывается в настройку publisher на PyPI.
+    # environment: pypi
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write  # создание релиза на GitHub
+      id-token: write  # OIDC-токен для PyPI
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          # Полная история нужна релизным нотам и проверке тега.
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Версия в pyproject совпадает с тегом
+        # Тег — обещание: опубликованный пакет должен совпадать с тем, что лежит
+        # в репозитории. Расхождение ловится здесь, а не на странице PyPI, где
+        # его уже никто не отменит. Версия живёт только в pyproject (дисциплина
+        # релиза), и этот шаг — единственное место, где они встречаются.
+        run: |
+          python - <<'PY'
+          import os, pathlib, sys, tomllib
+
+          meta = tomllib.loads(pathlib.Path("pyproject.toml").read_text(encoding="utf-8"))
+          version = meta["project"]["version"]
+          tag = os.environ["GITHUB_REF_NAME"]
+          if tag != f"v{version}":
+              print(f"тег {tag} не совпадает с версией {version} в pyproject.toml", file=sys.stderr)
+              sys.exit(1)
+          print(f"тег и версия совпадают: {version}")
+          PY
+
+      - name: Собрать дистрибутивы
+        run: |
+          python -m pip install --upgrade pip
+          pip install build twine
+          python -m build
+
+      - name: Метаданные примет PyPI
+        # twine check ловит битое описание и неверный readme до загрузки: после
+        # публикации это уже не исправить без новой версии.
+        run: twine check --strict dist/*
+
+      - name: Тесты на том, что уедет в PyPI
+        # Релизная линия отделена от main: если после тега что-то сломалось,
+        # публиковать нечего. Полные прогоны бота помечены slow и требуют
+        # клона репозитория — здесь проверяется сама ферма.
+        run: |
+          pip install -e ".[dev]" pytest-playwright
+          python -m playwright install --with-deps chromium
+          pytest -m "not slow"
+
+      - name: Релиз на GitHub
+        env:
+          GH_TOKEN: ${{ github.token }}
+        # Ноты генерируются из истории коммитов: раздел версии в CHANGELOG.md
+        # перед первым тегом ещё не выделен. Повторный запуск не должен падать
+        # из-за уже созданного релиза — проверяем и создаём только если нет.
+        run: |
+          if ! gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release create "$GITHUB_REF_NAME" \
+              --title "botkit-farm $GITHUB_REF_NAME" \
+              --generate-notes \
+              --verify-tag
+          fi
+
+      - name: Опубликовать на PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          # Проверка метаданных уже была выше; пропускаем повторную.
+          verify-metadata: false
+          # PEP 740: подпись происхождения артефактов. Если публикация упадёт
+          # именно на этом шаге — закомментируйте строку: это единственная
+          # причина, по которой может не пройти сам PyPI-шаг.
+          attestations: true
+
+      - name: Что именно опубликовано
+        if: always()
+        run: ls -l dist/
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: dist
+          path: dist/
+          if-no-files-found: warn
