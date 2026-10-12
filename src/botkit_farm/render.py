@@ -342,10 +342,23 @@ def _media_html(items: list[dict[str, Any]]) -> str:
 
 
 def _bg_assets() -> list[pathlib.Path]:
+    """Подложки кадра, лучшая первой: снимок владельца, иначе заглушка.
+
+    `tg-bg.*` — личный снимок окна Telegram, в git его нет по существу. Но
+    рендер и его тесты обязаны работать у того, кто этого снимка не имеет:
+    в репозитории лежит `placeholder.png`, и обещание «тесты рендера проходят
+    на заглушке» из `assets/README.md` было бы пустым, если бы подложка
+    игнорировалась. Кадр на заглушке — честно другой кадр: подпись «Демо-
+    интерфейс» на нём ставится в любом случае.
+    """
     d = _asset_dir()
     if not d.exists():
         return []
-    return sorted(d.glob("tg-bg.*"))
+    found = sorted(d.glob("tg-bg.*"))
+    placeholder = d / "placeholder.png"
+    if not found and placeholder.exists():
+        found = [placeholder]
+    return found
 
 
 def _bg_style(*, size: str = "cover") -> str:

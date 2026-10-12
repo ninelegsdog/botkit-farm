@@ -7,9 +7,18 @@ useDefault = true
 
 [[rules]]
 id = "telegram-api-hash"
-description = "Telegram api_hash/id в коде или конфиге"
-regex = '''(?i)\b(api_hash|api_id)\s*[:=]\s*["']?\d{5,}'''
-keywords = ["api_hash", "api_id"]
+description = "Telegram api_hash в коде или конфиге"
+# Настоящий api_hash — 32 шестнадцатеричных символа. Требование длины и
+# алфавита отсекает заглушки вида «api_hash: 1234567890», которыми сканер
+# проверяет сам себя: фикстура не должна выглядеть как утечка.
+regex = '''(?i)\bapi_hash\s*[:=]\s*["']?[0-9a-f]{32}\b'''
+keywords = ["api_hash"]
+
+[[rules]]
+id = "telegram-api-id"
+description = "Telegram api_id в коде или конфиге"
+regex = '''(?i)\bapi_id\s*[:=]\s*["']?\d{7,9}\b'''
+keywords = ["api_id"]
 
 [[rules]]
 id = "telegram-bot-token"
@@ -19,11 +28,16 @@ keywords = [":"]
 
 [[rules]]
 id = "fake-token-in-runtime-code"
-description = "Фейковый токен стенда, попавший в продакшен-код"
-# 424242:... допустим ТОЛЬКО как заглушка в коде фермы и её тестах.
+description = "Фейковый токен стенда вне кода фермы, тестов и документации"
+# 424242:... допустим ТОЛЬКО как заглушка в коде фермы, её тестах и в примерах
+# документации.
+#
+# Минус: gitleaks написан на RE2, а тот не знает отрицающего взгляда
+# `(?!src/...)` и умирает с «bad perl operator» — так падал весь workflow
+# секретов. Исключение поэтому задано списком путей, который RE2 понимает.
 regex = '''424242:FAKE-TOKEN-FOR-LOCAL-STAND'''
-path = '''^(?!src/botkit_farm/|tests/).*$'''
 keywords = ["424242"]
+allowlist = { paths = ['''^src/botkit_farm/''', '''^tests/''', '''^docs/'''] }
 
 [allowlist]
 paths = ['''(^|/)\.venv/''',

@@ -239,12 +239,17 @@ def default_roots(bot_dir: str | os.PathLike[str], *extra: str | os.PathLike[str
     Кроме каталога бота и базы сюда входит системный временный каталог:
     половина библиотек пишет туда при первом же импорте, и запрет на
     `tempfile` выглядел бы как «бот сломан», а не как «бот писал не туда».
+
+    Пути разрешаются здесь же, а не только внутри `Quarantine`. Разница видна
+    на macOS, где `/var` — симлинок в `/private/var`: возвращённый список
+    обещал бы каталоги, которых на самом деле нет, и сравнение «разрешён ли
+    этот путь» отвечало бы «нет».
     """
     roots: list[str] = [str(bot_dir), *map(str, extra)]
     roots.extend(os.environ.get("BOTKIT_FARM_QUARANTINE", "").split(os.pathsep))
     tmp = tempfile.gettempdir()
     roots.append(tmp)
-    return [root for root in roots if root]
+    return [os.path.realpath(root) for root in roots if root]
 
 
 def arm(

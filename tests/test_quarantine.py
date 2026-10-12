@@ -62,8 +62,13 @@ def test_в_каталог_бота_пишут_свободно(guard: Quarantin
 
 
 def test_чтение_везде_разрешено(guard: Quarantine) -> None:
-    """Бот обязан читать свои библиотеки и .env — это не запись."""
-    with open("/etc/hostname", encoding="utf-8") as fh:  # noqa: PTH123
+    """Бот обязан читать свои библиотеки и .env — это не запись.
+
+    Читается файл самого теста, а не `/etc/hostname`: на macOS такого файла
+    нет, и проверка падала бы не потому, что карантин сломан, а потому что
+    платформа другая.
+    """
+    with open(__file__, encoding="utf-8") as fh:  # noqa: PTH123
         fh.read()
 
     assert guard.violations == []

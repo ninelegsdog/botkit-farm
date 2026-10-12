@@ -191,6 +191,39 @@ def test_window_refuses_to_draw_without_backdrop(monkeypatch):
         raise AssertionError("кадр нарисован без подложки — это не то, что обещано")
 
 
+def test_подложкой_берётся_снимок_а_не_заглушка(tmp_path, monkeypatch):
+    """Личный снимок владельца важнее заглушки: на месте снимка кадр рисуется
+    на нём, а не на сером прямоугольнике."""
+    d = tmp_path / "assets"
+    d.mkdir()
+    (d / "tg-bg.png").write_bytes(b"screenshot")
+    (d / "placeholder.png").write_bytes(b"placeholder")
+    monkeypatch.setattr(render, "_asset_dir", lambda: d)
+
+    assert render._bg_assets() == [d / "tg-bg.png"]
+
+
+def test_без_снимка_берётся_заглушка(tmp_path, monkeypatch):
+    """Снимок владельца в git не попадает, поэтому копия репозитория обязана
+    оставаться пригодной для рендера: обещание из assets/README.md проверяется
+    здесь, а не в чужой машине."""
+    d = tmp_path / "assets"
+    d.mkdir()
+    (d / "placeholder.png").write_bytes(b"placeholder")
+    monkeypatch.setattr(render, "_asset_dir", lambda: d)
+
+    assert render._bg_assets() == [d / "placeholder.png"]
+
+
+def test_ни_снимка_ни_заглушки_нет_подложки(tmp_path, monkeypatch):
+    """Каталог без обоих файлов — честная пустота: кадр не рисуется вовсе."""
+    d = tmp_path / "assets"
+    d.mkdir()
+    monkeypatch.setattr(render, "_asset_dir", lambda: d)
+
+    assert render._bg_assets() == []
+
+
 def test_window_bubbles_stay_above_the_input_bar(browser, tmp_path):
     """Нижняя граница пузырей — над полем ввода (y=868), иначе кадр выдаёт себя
     макетом: настоящий чат не пишет на панели ввода."""
