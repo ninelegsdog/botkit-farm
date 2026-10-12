@@ -1,5 +1,11 @@
 # botkit-farm
 
+[![CI](https://github.com/ninelegsdog/botkit-farm/actions/workflows/ci.yml/badge.svg)](https://github.com/ninelegsdog/botkit-farm/actions/workflows/ci.yml)
+[![Мутации](https://github.com/ninelegsdog/botkit-farm/actions/workflows/mutation.yml/badge.svg)](https://github.com/ninelegsdog/botkit-farm/actions/workflows/mutation.yml)
+[![PyPI](https://img.shields.io/pypi/v/botkit-farm.svg)](https://pypi.org/project/botkit-farm/)
+[![Python](https://img.shields.io/pypi/pyversions/botkit-farm.svg)](https://pypi.org/project/botkit-farm/)
+[![Лицензия](https://img.shields.io/pypi/l/botkit-farm.svg)](https://github.com/ninelegsdog/botkit-farm/blob/main/LICENSE)
+
 Ферма тест-кейсов для Telegram-ботов: берёт **настоящий код** бота, прогоняет
 по нему сценарии **без Telegram**, снимает экраны диалога и пишет баг-репорты.
 
@@ -132,8 +138,8 @@ botkit-farm run --pack ./my-bot
 ```
 
 `bot.yaml` — манифест пака (имя бота, поколение сборки, env, режим кадра) с
-версией схемы; кейсы лежат в `cases/manual` и `cases/generated`. Подробности —
-в `obsidian/паки/pack.md`.
+версией схемы; кейсы лежат в `cases/manual` и `cases/generated`. Подробнее —
+в `docs/authoring-cases.md`.
 
 ### Версия схемы кейса
 
@@ -228,25 +234,12 @@ reports/      отчёты и кадры (в git не попадает)
 - Текст, медиа (фото, документы, голос, стикеры, видео, анимации), inline-кнопки,
   группы и треды, несколько участников и режим webhook — поддерживаются.
   Inline-режим (`answerInlineQuery`), альбомы, платежи и Telegram Login — нет;
-  полный список — в `obsidian/индексы/limitations.md`.
+  полный список — в `docs/limitations.md`.
 - Нагрузку не меряет: кейс проверяет поведение, а не производительность.
 - Кейс проверяет то, что в нём написано. Если кейс проходит по счастливому
   совпадению — это не баг фермы, а слабый кейс.
 
-## База знаний
+## Лицензия
 
-`obsidian/` — хранилище Obsidian: архитектура, формат кейсов, инспектор,
-безопасность, разбор семи дефектов, найденных прогоном, роадмап и ТЗ до
-продакшена. Вход — `obsidian/00-MOC.md`.
-
-```bash
-# открыть как хранилище
-obsidian open ~/BOTKIT-FARM/obsidian
-# или просто читать .md
-
-# проверить связность: битая ссылка хуже отсутствующей заметки
-python3 obsidian/_check_links.py
-```
-
-Проверка запускается и в CI, и в pre-commit: база без проверки ссылок
-разъезжается за месяц.
+MIT — см. [LICENSE](LICENSE). Публичные API (схема кейса, формат отчёта)
+версионируются явно: их поломка возможна только в мажорной версии.

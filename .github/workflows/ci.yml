@@ -69,7 +69,42 @@ jobs:
       - name: Связность базы знаний
         # Битая wikilink хуже отсутствующей заметки: читатель идёт по ней и не
         # находит ничего. Проверка живёт рядом с базой и запускается на каждый PR.
+        #
+        # В публичный репозиторий база знаний не входит — она внутренняя, — так
+        # что шаг пропускает форки без неё, а не падает на отсутствующем файле.
+        # Шаг добавлен вручную в конце списка, потому что его состояние зависит
+        # от того, есть ли obsidian/ в конкретной копии репозитория.
+        if: ${{ hashFiles('obsidian/_check_links.py') != '' }}
         run: python3 obsidian/_check_links.py
+
+      - name: Внутренние ссылки README ведут в репозиторий
+        # README отсылает к документации в docs/ — и ссылается на неё путём в
+        # обратных кавычках, а не только markdown-ссылками, поэтому проверяются
+        # оба вида. Ссылка на файл, которого нет, — это ровно тот случай, когда
+        # читатель уходит со страницы и не находит ничего.
+        run: |
+          python3 - <<'PY'
+          import pathlib, re, sys
+
+          ROOT_FILES = {"LICENSE", "pyproject.toml", "CHANGELOG.md", "README.md"}
+          readme = pathlib.Path("README.md")
+          body = readme.read_text(encoding="utf-8")
+
+          targets = set(re.findall(r"\]\((?!https?://)([^)#]+)", body))
+          for token in re.findall(r"`([^`\n]+)`", body):
+              if "/" in token and re.search(r"\.(md|toml|ya?ml|json|txt)$", token):
+                  targets.add(token)
+              elif token in ROOT_FILES:
+                  targets.add(token)
+
+          # Одиночные имена вроде `bot.yaml` пропускаются: их создаёт сама ферма
+          # (`init`) или пользователь, в репозитории их нет и быть не должно.
+          broken = sorted(t for t in targets if not (readme.parent / t).exists())
+          if broken:
+              print("README ссылается на несуществующие файлы:", *broken, sep="\n  ", file=sys.stderr)
+              sys.exit(1)
+          print(f"внутренние ссылки README на месте ({len(targets)})")
+          PY
 
       - name: Bandit (безопасность)
         run: bandit -c pyproject.toml -r src/botkit_farm

@@ -28,6 +28,8 @@ repos:
 
   - repo: local
     hooks:
+      # База знаний (obsidian/) внутренняя и в git не отслеживается, поэтому
+      # хук срабатывает только там, где она есть — локально или в форке с базой.
       - id: obsidian-links
         name: связность базы знаний
         entry: python3 obsidian/_check_links.py

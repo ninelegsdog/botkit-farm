@@ -46,6 +46,13 @@ dependencies = [
   "pillow>=10.0",
 ]
 
+[project.urls]
+# Ссылки на страницу проекта: без них карточка пакета на PyPI не ведёт никуда.
+Homepage = "https://github.com/ninelegsdog/botkit-farm"
+Repository = "https://github.com/ninelegsdog/botkit-farm"
+Issues = "https://github.com/ninelegsdog/botkit-farm/issues"
+Changelog = "https://github.com/ninelegsdog/botkit-farm/blob/main/CHANGELOG.md"
+
 [project.optional-dependencies]
 dev = [
   "pytest>=8.0",

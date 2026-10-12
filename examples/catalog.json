@@ -49,7 +49,7 @@
     {
       "id": "membership-toast-autorenew",
       "case": "membership-toast-autorenew.yaml",
-      "why": "дефект: obsidian/опыт/lessons #4 — всплывающее уведомление обязано попадать в отчёт, а не теряться (botkit-membership)"
+      "why": "дефект: всплывающее уведомление обязано попадать в отчёт, а не теряться (botkit-membership)"
     },
     {
       "id": "membership-webhook",
