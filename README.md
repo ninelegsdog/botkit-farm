@@ -1,35 +1,47 @@
 # botkit-farm
 
-[![CI](https://github.com/ninelegsdog/botkit-farm/actions/workflows/ci.yml/badge.svg)](https://github.com/ninelegsdog/botkit-farm/actions/workflows/ci.yml)
-[![Мутации](https://github.com/ninelegsdog/botkit-farm/actions/workflows/mutation.yml/badge.svg)](https://github.com/ninelegsdog/botkit-farm/actions/workflows/mutation.yml)
-[![PyPI](https://img.shields.io/pypi/v/botkit-farm.svg)](https://pypi.org/project/botkit-farm/)
-[![Python](https://img.shields.io/pypi/pyversions/botkit-farm.svg)](https://pypi.org/project/botkit-farm/)
-[![Лицензия](https://img.shields.io/pypi/l/botkit-farm.svg)](https://github.com/ninelegsdog/botkit-farm/blob/main/LICENSE)
+A test-case farm for Telegram bots. It takes the **real code** of a bot, runs scenarios
+against it **without Telegram**, captures frames of the dialogue and writes bug
+reports.
 
-Ферма тест-кейсов для Telegram-ботов: берёт **настоящий код** бота, прогоняет
-по нему сценарии **без Telegram**, снимает экраны диалога и пишет баг-репорты.
+[![ci](https://github.com/ninelegsdog/botkit-farm/actions/workflows/ci.yml/badge.svg)](https://github.com/ninelegsdog/botkit-farm/actions/workflows/ci) [![mutation](https://github.com/ninelegsdog/botkit-farm/actions/workflows/mutation.yml/badge.svg)](https://github.com/ninelegsdog/botkit-farm/actions/workflows/mutation) [![release](https://github.com/ninelegsdog/botkit-farm/actions/workflows/release.yml/badge.svg)](https://github.com/ninelegsdog/botkit-farm/actions/workflows/release) [![License](https://img.shields.io/github/license/ninelegsdog/botkit-farm.svg)](LICENSE) [![PyPI](https://img.shields.io/pypi/v/botkit-farm.svg)](https://pypi.org/project/botkit-farm/)
 
-## Что это и зачем
+> **Status.** Published to PyPI and green on CI, including a mutation-testing workflow.
+One gap, stated rather than hidden: **there is no Dependabot configuration** in
+this repository, so dependency updates are not proposed automatically.
 
-Обычно, чтобы «протестировать бота», нужен живой Telegram, реальный токен и
-человек, который тыкает кнопки. Здесь вместо этого:
+## Contents
 
-- **код бота — настоящий** (клон его репозитория, его диспетчер поднимается как в `main()`),
-- **доставка сообщений — фейковая** (локальный сервер вместо `api.telegram.org`),
-- **проверки — в кейсах** (что бот должен ответить), а не «заговорил ли он».
+- [What this is for](#what-this-is-for)
+- [Requirements](#requirements)
+- [Install](#install)
+- [Quick start](#quick-start)
+- [A test case](#a-test-case)
+- [Commands](#commands)
+- [`doctor`: what is wrong, and what to run](#doctor-what-is-wrong-and-what-to-run)
+- [Documentation](#documentation)
+- [Development process](#development-process)
+- [Contributing](#contributing)
+- [Security](#security)
+- [License](#license)
 
-Итог каждого прогона — **кадр** (скриншот диалога) и **отчёт** (что сошлось, а
-что нет). Упавшее ожидание — это баг-репорт с фактами: что ожидалось, что пришло,
-на каком шаге.
+## What this is for
 
-## Требования
+A test-case farm for Telegram bots. It takes the **real code** of a bot, runs scenarios
+against it **without Telegram**, captures frames of the dialogue and writes bug
+reports.
 
-- Python ≥ 3.11
-- Redis на порту 6380 (троттлинг и FSM бота без него не работают):
-  `redis-server --port 6380 --daemonize yes`
-- Chromium для рендера: `python -m playwright install chromium`
+**The bot's code is real** — the farm clones the repository and boots its dispatcher as `main()` would.
+**Message delivery is faked** — a local server stands in for `api.telegram.org`, so no token and no network are involved.
+**Assertions live in the case** — a case states what the bot should answer, not whether it answered at all.
 
-## Установка
+## Requirements
+
+- Python 3.11 or newer
+- Redis on port 6380 — throttling and the bot's FSM do not work without it: `redis-server --port 6380 --daemonize yes`
+- Chromium for frame capture: `python -m playwright install chromium`
+
+## Install
 
 ```bash
 python3 -m venv .venv
@@ -37,209 +49,123 @@ python3 -m venv .venv
 .venv/bin/playwright install chromium
 ```
 
-## Быстрый старт
+## Quick start
 
 ```bash
-# 1. Проверить, что стенд в порядке
+# 1. check the stand is healthy
 .venv/bin/botkit-farm doctor
 
-# 2. Изучить код бота: команды, кнопки, поколение сборки
-.venv/bin/botkit-farm study ~/botkit-bookingbot
+# 2. read the bot: commands, buttons, build generation
+.venv/bin/botkit-farm study ../bots/botkit-bookingbot
 
-# 3. Написать кейс в cases/booking.yaml (см. ниже), затем
+# 3. write a case in cases/booking.yaml, then
 .venv/bin/botkit-farm run cases/booking.yaml
 
-# Все кейсы разом
+# every case at once
 .venv/bin/botkit-farm run --tag smoke
 ```
 
-## Тест-кейс (YAML)
+## A test case
+
+A case is YAML. This is the whole shape:
 
 ```yaml
-id: booking-start          # только [a-z0-9_-], станет именем отчёта и кадра
-title: Стартовое меню записи
-source: ../bots/botkit-bookingbot   # локальный путь или https/git-URL
-builder: newgen            # legacy | newgen | reminder (или сторонний адаптер)
-raw: false                 # true — бот сам разбирает сырой JSON (см. ниже)
-frame: window              # window | phone | wide — как снимать кадр
+id: booking-start          # [a-z0-9_-] only; becomes the report and frame name
+title: Booking start menu
+source: ../bots/botkit-bookingbot   # a local path, or an https/git URL
+builder: newgen            # legacy | newgen | reminder, or a third-party adapter
+raw: false                 # true — the bot parses the raw JSON itself
+frame: window              # window | phone | wide
 
 steps:
   - send: /start
     expect:
-      text_contains: ["Запись"]
-      buttons_contains: ["Записаться"]
-  - click: Записаться
-    pause: 2.5             # пауза, если бот тротттлит
+      text_contains: ["Booking"]
+      buttons_contains: ["Book"]
+  - click: Book
+    pause: 2.5             # only if the bot throttles
     expect:
-      text_contains: ["Выберите услугу"]
+      text_contains: ["Choose a service"]
 ```
 
-`expect` описывает, что **должно** быть в ответе. Пустое ожидание — ошибка
-валидации: кейс, который ничего не проверяет, не может упасть, а значит, не
-доказывает ничего.
+`expect` states what **must** be in the reply. An empty expectation is a
+validation error: a case that checks nothing cannot fail, and therefore proves
+nothing.
 
-`builder` можно не указывать — поколение определится по коду. Для бота с
-собственным композиционным корнем он принимает ссылку на сторонний адаптер:
+`builder` may be omitted — the generation is detected from the code. A bot with
+its own composition root can point at a third-party adapter:
 
 ```yaml
-builder: botkit-farm.adapter:mypkg.adapters.mine   # модуль ставится в окружение бота
+builder: botkit-farm.adapter:mypkg.adapters.mine   # the module is installed into the bot's environment
 ```
 
-Контракт адаптера и четыре референсных сборки — в [docs/adapters/](docs/adapters/README.md).
+`raw: true` hands the bot the same step as the raw JSON Telegram sends
+(`feed_raw_update`), so the dialogue is identical and **deserialisation** is
+tested too — the path from polling/webhook in production, and the most common
+class of bug: the bot relies on a field the raw JSON does not contain.
 
-`raw: true` заставляет ферму отдавать боту не готовый объект `Update`, а тот же
-шаг в виде JSON, как его присылает Telegram (`feed_raw_update`). Диалог тот же,
-но проверяется ещё и **десериализация** — путь из polling/webhook в проде и самый
-частый класс багов: бот полагается на поле, которого в сыром JSON нет.
+## Commands
 
-## Команды
-
-| Команда | Что делает |
+| Command | What it does |
 |---|---|
-| `doctor` | Проверяет стенд и печатает, что не так, почему это важно и какую команду выполнить |
-| `study <репо>` | Печатает команды, кнопки, тексты ответов и поколение сборки |
-| `list` | Показывает кейсы и их источники |
-| `init <репо>` | Заводит каркас пака `.botkit-farm` в репозитории бота |
-| `run [кейсы...]` | Прогоняет кейсы, пишет отчёты и кадры (`--pack` — кейсы пака, `--junit` — отчёт JUnit XML для CI) |
-| `migrate [каталог]` | Приводит кейсы к текущей версии схемы (`--check` — для CI) |
-| `catalog [каталог]` | Показывает каталог регрессов (`--check` — для CI, дефолт `examples`) |
+| `doctor` | Checks the stand and prints what is wrong, why it matters, and the command to run |
+| `study <repo>` | Prints the bot's commands, buttons, reply texts and build generation |
+| `list` | Shows the cases and their sources |
+| `init <repo>` | Creates a `.botkit-farm` pack skeleton in the bot's repository |
+| `run [cases...]` | Runs cases, writes reports and frames (`--pack` for a pack's cases, `--junit` for a JUnit XML report) |
+| `migrate [dir]` | Brings cases up to the current schema version (`--check` for CI) |
+| `catalog [dir]` | Shows the regression catalogue (`--check` for CI, default `examples`) |
 
-### `doctor`: что не так, почему и что делать
+## `doctor`: what is wrong, and what to run
 
-Каждая неудача в `doctor` — это строка «что», строка «почему это важно» и
-**команда**, которую нужно выполнить. Проверки разделены на два уровня, и
-разделение не декоративное:
+Every failure `doctor` reports is a "what", a "why this matters" and **the command
+to run**. The checks are split into two levels, and the split is not decorative:
 
-| Уровень | Что это значит | Пример |
+| Level | Meaning | Example |
 |---|---|---|
-| **Блокер** | без этого прогон не запустится или уедет не туда; код возврата 1 | не поднят Redis, в окружении настоящий токен, нет кейсов |
-| **Ухудшение** | проверки пройдут и вердикт будет верным, но результат получится беднее; код возврата 0 | нет подложки или Chromium — кадр не снимется; нет каталога `reports/` — создастся сам |
+| Blocker | the run will not start, or will go somewhere wrong; exit code 1 | Redis is not up, a real token is in the environment, there are no cases |
+| Degradation | the checks pass and the verdict is correct, but the result is poorer; exit code 0 | no substrate or Chromium, so no frame is captured; no `reports/` directory, so one is created |
 
-```console
-$ botkit-farm doctor
-Блокеры — без этого прогон не запустится (1)
-  [FAIL] redis: Redis не отвечает на redis://127.0.0.1:6380/0 (ConnectionError)
-         почему: Redis переживает прогон, а база — нет. Без стирки второй запуск
-                 продолжил бы диалог с середины, и кейс падал бы без единой ошибки.
-         команда: redis-server --port 6380 --daemonize yes
-```
+## Documentation
 
-Команда в подсказке называет порт из `BOTKIT_FARM_REDIS`, а не зашитый: стенд
-часто поднимают на своём порту.
+- **[docs/adapters/README.md](docs/adapters/README.md)** — Readme.
+- **[docs/authoring-cases.md](docs/authoring-cases.md)** — Authoring Cases.
+- **[docs/limitations.md](docs/limitations.md)** — Limitations.
+- **[docs/security.md](docs/security.md)** — Security.
+- **[CHANGELOG.md](CHANGELOG.md)** — what changed, and when.
+- **[CONTRIBUTING.md](CONTRIBUTING.md)** — how to set up, what CI checks.
+- **[SECURITY.md](SECURITY.md)** — how to report a vulnerability.
 
-## Пак: кейсы рядом с ботом
+## Development process
 
-Кейсы можно держать не в этом репозитории, а в репозитории самого бота —
-каталоге `.botkit-farm`. Тогда тесты меняются вместе с кодом, который проверяют.
+This project was built in an AI-native process: the implementation was produced by
+coding agents under human-led engineering control — requirement slots, constraints
+and acceptance criteria defined in advance, then specification, generation, run,
+check, fix.
 
-```bash
-botkit-farm init ./my-bot      # создать .botkit-farm/{bot.yaml,cases,fixtures}
-botkit-farm run --pack ./my-bot
-```
+My role in the project:
 
-`bot.yaml` — манифест пака (имя бота, поколение сборки, env, режим кадра) с
-версией схемы; кейсы лежат в `cases/manual` и `cases/generated`. Подробнее —
-в `docs/authoring-cases.md`.
+- product definition and user-facing scenarios;
+- decomposition into independent engineering stages;
+- context engineering: the instructions, constraints and working rules agents run under;
+- management of the context window between iterations;
+- the loop of specification → generation → run → verification → correction;
+- validation, testing and review;
+- control of repository structure, configuration, documentation and run reproducibility.
 
-### Версия схемы кейса
+Implementation code was generated with AI coding agents under human-led engineering
+control. The full description of the process, the `AGENTS.md` template, and the
+review checklists for AI-written code and secrets are in
+[agentic-development-playbook](https://github.com/ninelegsdog/agentic-development-playbook).
 
-Каждый кейс называет свою схему первой строкой — `schema_version`. Отсутствие
-поля читается как версия 1 (мягкая миграция для чужих репозиториев), а более
-новая версия — это отказ с номером, а не молчаливый прогон по чужому формату.
+## Contributing
 
-```bash
-botkit-farm migrate --check cases   # падает, если кейс отстал от фермы (шаг CI)
-botkit-farm migrate cases           # привести кейсы к текущей версии
-```
+See [CONTRIBUTING.md](CONTRIBUTING.md). In short: run `pytest`, run `ruff check .`, and explain why rather than what.
 
-Миграции — чистые функции в `case/migration.py`, цепочка `vN → vN+1`.
+## Security
 
-### Каталог регрессов
+Do not open a public issue for a security problem. See [SECURITY.md](SECURITY.md).
 
-`examples/` — это не примеры «на посмотреть», а каталог регрессов: кейсы против
-публичных ботов из `ninelegsdog`, которые CI гоняет на каждом PR. У каталога
-есть манифест `examples/catalog.json`, и он держит обещание в обе стороны: кейс
-из манифеста обязан существовать, а каждый кейс в каталоге — быть в манифесте.
-Так удаление регресса не проходит незамеченным.
+## License
 
-```bash
-botkit-farm catalog                 # перечислить регрессы и зачем каждый
-botkit-farm catalog --check examples  # шаг CI: падает при разрыве каталога
-```
-
-У каждой записи есть поле `why` — зачем регресс существует: покрываемый путь или
-ссылка на дефект. Запись без причины недопустима: такой кейс завтра удалят как
-«никому не нужный». Формат манифеста — JSON, а не YAML, намеренно: загрузчик
-кейсов обходит `*.y*ml`, и `catalog.yaml` попал бы в прогон как битый кейс.
-
-## Безопасность
-
-Ферма исполняет чужой код и рисует по нему картинки, поэтому:
-
-- **настоящий токен Telegram в окружении — прогон не начнётся** (`security.assert_fake_token`);
-- **egress заблокирован внутри процесса бота**: ходить можно только на `127.0.0.1` (фейковый API и Redis); попытки наружу попадают в результат кейса;
-- **запись ограничена каталогами прогона**: бот получает `PermissionError` и не может создать файл в `$HOME` или в чужом репозитории;
-- **пути в песочнице**: кейс и репозиторий не могут выйти за пределы проекта (`safe_join`);
-- **секреты вычищаются** из отчётов (`scrub`) — бот может показать свой `.env` в ответе, и это не должно уехать в git;
-- **песочница ОС** (`bubblewrap`) включается переменной `BOTKIT_FARM_SANDBOX=1` и по умолчанию стоит в CI.
-
-Подробности — в [docs/security.md](docs/security.md).
-
-## Структура
-
-```
-src/botkit_farm/
-  case/       модель и загрузка YAML-кейсов (pydantic)
-  runner/     движок прогона и модель результата
-  inspector/  разбор репозитория (команды, кнопки, тексты)
-  report/     Markdown-, JSON- и JUnit-отчёты
-  adapters/   сборка бота: встроенные поколения + точка расширения
-    legacy/newgen/reminder — композиционные корни фермы
-    registry.py — разбор `builder` (встроенное имя или ссылка на плагин)
-    contract.py — что обязан вернуть `build()`, проверка pydantic-моделью
-  pack.py     пак `.botkit-farm`: манифест bot.yaml и каркас
-  catalog.py  каталог регрессов: манифест catalog.json и проверка целостности
-  fake_api.py поддельный Telegram Bot API
-  scene.py    Update'ы: сообщение и нажатие кнопки
-  render.py   рендер кадра (поверх снимка окна / портрет / макет)
-  security.py токен, egress, песочница, секреты
-  quarantine.py ограничения внутри процесса бота: запись и сеть
-  sandbox.py  песочница ОС (bubblewrap) вокруг прогона
-  doctor.py   проверки стенда: что не так, почему и какая команда
-  source.py   локальный путь или клон в песочницу
-cases/        ваши кейсы (YAML)
-examples/     каталог регрессов против публичных ботов (YAML + catalog.json)
-assets/       подложка кадра (снимок окна Telegram)
-bots/         песочница клонов (в git не попадает)
-reports/      отчёты и кадры (в git не попадает)
-```
-
-## Изоляция чужого кода
-
-Код бота исполняется с правами владельца, и это ограничение фермы признаёт
-прямо. Три слоя, от дешёвого к дорогому:
-
-| Слой | Что запрещает | Когда |
-|---|---|---|
-| `security` | настоящий токен, чужой `source`, секреты в отчёте | всегда |
-| `quarantine` | запись вне каталогов прогона и сеть мимо loopback | всегда, внутри процесса бота |
-| `bubblewrap` | чтение `$HOME`, `.ssh` и чужих репозиториев | `BOTKIT_FARM_SANDBOX=1`, включено в CI |
-
-Нарушения карантина не проглатываются: бот получает `PermissionError` с текстом,
-а список попыток попадает в отчёт кейса. `botkit-farm doctor` показывает, какая
-изоляция доступна, а какая включена.
-
-## Ограничения (честно)
-
-- Текст, медиа (фото, документы, голос, стикеры, видео, анимации), inline-кнопки,
-  группы и треды, несколько участников и режим webhook — поддерживаются.
-  Inline-режим (`answerInlineQuery`), альбомы, платежи и Telegram Login — нет;
-  полный список — в `docs/limitations.md`.
-- Нагрузку не меряет: кейс проверяет поведение, а не производительность.
-- Кейс проверяет то, что в нём написано. Если кейс проходит по счастливому
-  совпадению — это не баг фермы, а слабый кейс.
-
-## Лицензия
-
-MIT — см. [LICENSE](LICENSE). Публичные API (схема кейса, формат отчёта)
-версионируются явно: их поломка возможна только в мажорной версии.
+MIT — see [LICENSE](LICENSE).
