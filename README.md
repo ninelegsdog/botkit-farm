@@ -44,7 +44,7 @@ python3 -m venv .venv
 .venv/bin/botkit-farm doctor
 
 # 2. Изучить код бота: команды, кнопки, поколение сборки
-.venv/bin/botkit-farm study ~/BOTOGRAD/_ГЕНЕРАЦИЯ/i2_bot_farm/src/botkit-bookingbot
+.venv/bin/botkit-farm study ~/botkit-bookingbot
 
 # 3. Написать кейс в cases/booking.yaml (см. ниже), затем
 .venv/bin/botkit-farm run cases/booking.yaml
