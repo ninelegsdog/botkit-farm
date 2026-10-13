@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import pathlib
 import subprocess
+import time
 from types import SimpleNamespace
 from typing import Any
 
@@ -671,15 +672,24 @@ def test_длительность_измеряется_даже_при_ошиб�
 
 def test_длительность_это_прошедшее_время_а_не_сумма(tmp_path, monkeypatch) -> None:
     """Верхняя граница важна: `now + started` дал бы время с момента загрузки
-    системы, и в отчёте кейс выглядел бы идущим сутки."""
+    системы, и в отчёте кейс выглядел бы идущим сутки.
+
+    Граница берётся не числом, а измеряется здесь же. Константа вида `< 3600`
+    проверяла не длительность, а аптайм хоста: `time.monotonic()` — секунды с
+    загрузки, и на свежем раннере `now + started` равно примерно двум секундам
+    аптайма, то есть гарантированно меньше любого разумного потолка. Мутация
+    выживала не потому, что код её не ловил, а потому что машина была свежей.
+    """
     case = _кейс()
     _Окружение(tmp_path, monkeypatch, ExecResult(turns=[]))
 
+    elapsed_start = time.monotonic()
     res = engine.run_case(
         case, bot_dir=tmp_path / "bot", cache_dir=tmp_path / "envs", work_dir=tmp_path / ".work"
     )
+    elapsed = time.monotonic() - elapsed_start
 
-    assert res.duration_s < 3600.0
+    assert res.duration_s <= elapsed + 1.0
 
 
 def test_удовлетворённое_ожидание_не_оставляет_провалов(tmp_path, monkeypatch) -> None:
