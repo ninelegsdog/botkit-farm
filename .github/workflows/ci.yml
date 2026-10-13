@@ -27,7 +27,16 @@ jobs:
     name: Линтеры и гейты
     runs-on: ubuntu-latest
     steps:
+      # fetch-depth: 0 is required, not a preference. The gitleaks step below
+      # asks for `<sha>^..<sha>`, and with the default shallow checkout of depth 1
+      # the parent commit does not exist -- the scan dies with "unknown revision"
+      # before it scans anything. On a push event the action never asks for the
+      # parent, which is why main stayed green and every pull request went red.
+      # This repository had no pull request before that, so the path was never
+      # exercised.
       - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-python@v6
         with:
@@ -143,7 +152,11 @@ jobs:
         # получил бы не тот интерпретатор.
         python: ["3.11", "3.12", "3.13"]
     steps:
+      # Same reason as the check job above: a depth-1 checkout leaves no parent
+      # commit for anything that asks for one.
       - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-python@v6
         with:

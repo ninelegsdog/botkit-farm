@@ -8,8 +8,8 @@
 только в мажорной версии (версия схемы — поле `schema_version` в кейсе).
 
 ## [Unreleased]
-
 ### Added
+
 
 - **Ферма тест-кейсов.** Прогон YAML-сценария по настоящему коду бота без
   Telegram: фейковый Bot API, кадр диалога и отчёт с фактами (ожидалось / пришло
@@ -53,12 +53,29 @@
 - Рендер кадров диалога поверх снимка окна (портрет и макет), упавший кадр
   получает суффикс `-fail`.
 
+- The repository presents itself as it is. The README became a front page — pitch,
+  badges, a table of contents and user-facing sections — and issue forms plus a
+  pull-request template now ask for the evidence this project acts on: what was
+  run, what was expected, and how "done" would be able to fail.
+- Governance layer brought to the family standard: `CONTRIBUTING.md`,
+  `SECURITY.md`, `CODE_OF_CONDUCT.md`, `AGENTS.md`, `.editorconfig`,
+  `.gitattributes` and `CODEOWNERS`.
+- `scripts/check-repo-contract.py` checks this repository against the shared
+  contract, and `scripts/check-repo-contract_test.py` proves that checker can
+  fail. A gate that has never gone red is an assumption, not a gate.
+- Long-form documentation that already existed but was not linked is now linked from the front page: `docs/adapters/README.md`, `docs/authoring-cases.md`, `docs/limitations.md`, `docs/security.md`.
+
 ### Changed
+
 
 - Окружение бота — отдельный venv на бота (у ботов разные зависимости), а не
   общее на ферму.
 
+- Line endings are pinned to LF by `.gitattributes`, so a CRLF contributor no
+  longer turns every touched line into a diff.
+
 ### Fixed
+
 
 - Путь БД ломался при относительном `bot_dir`: `work_dir` теперь передаётся
   явно, а `bot_dir` приводится к абсолютному пути.
@@ -66,7 +83,12 @@
   проверки; теперь собираются отдельно, попадают в отчёт и в кадр.
 - Устранено дублирование тоста обычным сообщением в ленте диалога.
 
+- `README-testing.md` was unreachable from the README in every bot of the family
+  except one. A document nobody can reach is a document nobody reads; it is linked
+  from the front page now.
+
 ### Security
+
 
 - Настоящий токен Telegram останавливает прогон; секреты вычищаются из отчётов.
 - Во время прогона egress заблокирован (только loopback).
