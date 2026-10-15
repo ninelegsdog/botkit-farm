@@ -275,6 +275,54 @@ def test_шаг_choice_доходит_до_хоста_вместе_с_вариа
     assert 'if kind == "choice":' in seen["script"]
 
 
+def test_шаг_callback_доходит_до_хоста_как_сырые_данные(
+    tmp_path: pathlib.Path, monkeypatch
+) -> None:
+    """Сырой callback_data не резолвится по подписи — ветка шлёт значение как есть.
+
+    Граница проверяется здесь: шаг уезжает в `steps.json` с видом `callback`,
+    а скрипт содержит ветку, которая строит CallbackQuery без поиска по `known`
+    (поиск свёл бы подделку к «кнопки нет» и прятал бы отказ бота).
+    """
+    seen: dict[str, object] = {}
+    monkeypatch.delenv("BOTKIT_FARM_SANDBOX", raising=False)
+
+    def fake_run(cmd: list[str], **kw: object) -> SimpleNamespace:
+        script = pathlib.Path(cmd[-1])
+        seen["steps"] = json.loads((script.parent / "steps.json").read_text(encoding="utf-8"))
+        seen["script"] = script.read_text(encoding="utf-8")
+        (script.parent / "result.json").write_text("[]", encoding="utf-8")
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(host.subprocess, "run", fake_run)
+
+    steps = [
+        {
+            "kind": "callback",
+            "label": "послать сырой callback «order_cancel»",
+            "value": "order_cancel",
+            "gap": 1.0,
+        }
+    ]
+    host.run_bot(
+        farm_src=tmp_path,
+        bot_python=tmp_path / "py",
+        bot_dir=tmp_path / "bot",
+        adapter_module="botkit_farm.adapters.legacy",
+        adapter_attr="build",
+        raw=False,
+        mode="polling",
+        port=8200,
+        fixture=None,
+        steps=steps,
+        db_path=tmp_path / "b.db",
+    )
+
+    assert seen["steps"] == steps
+    assert 'elif kind == "callback":' in seen["script"]
+    assert "scene.to_callback(value, uid" in seen["script"]
+
+
 def test_хост_строит_актёра_через_мост_а_не_сырой_актёр(
     tmp_path: pathlib.Path, monkeypatch
 ) -> None:

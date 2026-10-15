@@ -292,6 +292,22 @@ async def main():
                     uid += 1
                     continue
                 update = scene.to_callback(last_btns[pos], uid, actor=actor, chat=chat)
+            elif kind == "callback":
+                # Сырой callback_data (ТЗ: шаг callback). Кнопки с такими данными
+                # у бота не было — клиент подделывает нажатие, и проверяется
+                # отказ на подделку (IDOR). Поэтому поиск по `known` не нужен и
+                # `no_button` не строится: отсутствие кнопки — не ошибка шага.
+                role = step.get("as")
+                actor_cfg = ACTORS.get(role) if role else None
+                actor = None
+                if actor_cfg:
+                    actor = scene.actor_from_config(actor_cfg)
+                chat_cfg = CHAT if CHAT else None
+                chat = None
+                if chat_cfg:
+                    from botkit_farm.scene import ChatConfig
+                    chat = ChatConfig(id=scene.FAKE_CHAT_ID, type=chat_cfg.get("type", "private"), title=chat_cfg.get("title"), thread_id=chat_cfg.get("thread_id"), bot_username=chat_cfg.get("bot_username"))
+                update = scene.to_callback(value, uid, actor=actor, chat=chat)
             else:
                 data = value
                 # Определить актёра и чат для шага (ТЗ C3)

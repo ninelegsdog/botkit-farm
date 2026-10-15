@@ -306,8 +306,12 @@ class _Planned:
     total: int = 1
 
 
-def _действие(send: str | None, click: str | None, pick: str | None) -> tuple[str, str]:
+def _действие(
+    send: str | None, click: str | None, pick: str | None, callback: str | None
+) -> tuple[str, str]:
     """Вид действия и его значение. Порядок совпадает с приоритетом в модели."""
+    if callback is not None:
+        return "callback", callback
     if click is not None:
         return "cb", click
     if pick is not None:
@@ -319,6 +323,8 @@ def _подпись(kind: str, value: str) -> str:
     """Имя действия по его виду и (уже отрендеренному) значению."""
     if kind == "cb":
         return f"нажать «{value}»"
+    if kind == "callback":
+        return f"послать сырой callback «{value}»"
     if kind == "pick":
         return f"нажать кнопку {value}"
     head = value.splitlines()[0][:40]
@@ -341,7 +347,9 @@ def _plan(case: Case) -> list[_Planned]:
             if st.choice:
                 options: list[dict[str, str]] = []
                 for b in st.choice:
-                    kind, value = _действие(b.send, b.click, b.pick)
+                    # Вариант choice — send/click/pick: сырой callback в ветку
+                    # не идёт, он обязан быть отдельным шагом под тегом.
+                    kind, value = _действие(b.send, b.click, b.pick, None)
                     options.append({"kind": kind, "value": tmpl.render(value, ctx, where)})
                 label = f"выбрать доступное действие ({_подпись(options[0]['kind'], options[0]['value'])})"
                 item = _Planned(
@@ -356,7 +364,7 @@ def _plan(case: Case) -> list[_Planned]:
                     total=count,
                 )
             else:
-                kind, value = _действие(st.send, st.click, st.pick)
+                kind, value = _действие(st.send, st.click, st.pick, st.callback)
                 rendered = tmpl.render(value, ctx, where)
                 item = _Planned(
                     label=_подпись(kind, rendered),
