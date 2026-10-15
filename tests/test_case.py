@@ -262,9 +262,7 @@ def test_сырой_callback_в_ветке_choice_отвергается():
                 "title": "Ветка",
                 "source": ".",
                 "tags": ["security"],
-                "steps": [
-                    {"choice": [{"callback": "order_cancel"}], "expect": {"silent": True}}
-                ],
+                "steps": [{"choice": [{"callback": "order_cancel"}], "expect": {"silent": True}}],
             }
         )
 
