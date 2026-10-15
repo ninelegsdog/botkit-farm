@@ -256,8 +256,7 @@ async def main():
                 actor_cfg = ACTORS.get(role) if role else None
                 actor = None
                 if actor_cfg:
-                    from botkit_farm.scene import Actor
-                    actor = Actor(user_id=actor_cfg["user_id"], name=actor_cfg.get("name"), is_bot=actor_cfg.get("is_bot", False))
+                    actor = scene.actor_from_config(actor_cfg)
                 chat_cfg = CHAT if CHAT else None
                 chat = None
                 if chat_cfg:
@@ -270,8 +269,7 @@ async def main():
                 actor_cfg = ACTORS.get(role) if role else None
                 actor = None
                 if actor_cfg:
-                    from botkit_farm.scene import Actor
-                    actor = Actor(user_id=actor_cfg["user_id"], name=actor_cfg.get("name"), is_bot=actor_cfg.get("is_bot", False))
+                    actor = scene.actor_from_config(actor_cfg)
                 chat_cfg = CHAT if CHAT else None
                 chat = None
                 if chat_cfg:
@@ -293,7 +291,7 @@ async def main():
                                    "known": last_btns}})
                     uid += 1
                     continue
-                update = scene.to_callback(last_btns[pos], uid)
+                update = scene.to_callback(last_btns[pos], uid, actor=actor, chat=chat)
             else:
                 data = value
                 # Определить актёра и чат для шага (ТЗ C3)
@@ -301,8 +299,7 @@ async def main():
                 actor_cfg = ACTORS.get(role) if role else None
                 actor = None
                 if actor_cfg:
-                    from botkit_farm.scene import Actor
-                    actor = Actor(user_id=actor_cfg["user_id"], name=actor_cfg.get("name"), is_bot=actor_cfg.get("is_bot", False))
+                    actor = scene.actor_from_config(actor_cfg)
                 chat_cfg = CHAT if CHAT else None
                 chat = None
                 if chat_cfg:

@@ -90,6 +90,22 @@ def _default_actor() -> Actor:
     return Actor(user_id=FAKE_USER_ID, first_name="Иван", last_name="П.")
 
 
+def actor_from_config(cfg: dict[str, Any]) -> Actor:
+    """Собрать Actor из словаря движка кейса ({user_id, name, is_bot}).
+
+    Единственный стык между моделью кейса (`case.model.Actor` с полем `name`) и
+    сценой (`Actor` с `first_name`/`last_name` для Update). Раньше хост строил
+    Actor напрямую с `name=`, которого у сцены нет, — и любой мультиактёрный кейс
+    падал на запуске (`TypeError: unexpected keyword argument 'name'`). Стык
+    вынесен сюда, чтобы его можно было проверить тестом, а не только в рантайме.
+    """
+    return Actor(
+        user_id=cfg["user_id"],
+        first_name=cfg.get("name") or "Участник",
+        is_bot=cfg.get("is_bot", False),
+    )
+
+
 def _default_chat() -> ChatConfig:
     return ChatConfig(id=FAKE_CHAT_ID, type="private")
 
@@ -179,6 +195,7 @@ def to_raw_update(update: Any) -> dict[str, Any]:
 __all__ = [
     "Actor",
     "ChatConfig",
+    "actor_from_config",
     "FAKE_USER_ID",
     "FAKE_CHAT_ID",
     "FAKE_NAME",

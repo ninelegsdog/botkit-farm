@@ -1,0 +1,27 @@
+schema_version: 1
+id: pricesentry-admin-guard
+title: pricesentry — админ-guard на reply-кнопках
+source: https://github.com/ninelegsdog/botkit-pricesentry
+builder: newgen
+fixture: pricesentry
+seed: true
+tags:
+- regression
+- security
+actors:
+  admin:
+    user_id: 424242
+    name: Админ
+  guest:
+    user_id: 555000111
+    name: Гость
+steps:
+- send: 📊 Общая статистика
+  as: guest
+  expect:
+    silent: true
+- send: 📊 Общая статистика
+  as: admin
+  expect:
+    text_contains:
+    - Всего товаров
