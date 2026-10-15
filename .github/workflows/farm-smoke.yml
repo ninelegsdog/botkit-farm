@@ -93,15 +93,33 @@ jobs:
 
       - name: Офлайн-прогоны по коду из чекаута
         working-directory: farm
+        env:
+          BOT: ${{ inputs.bot }}
         # Глоб без совпадений — падение: кейсов нет, и молчание здесь означало
         # бы «зелёный CI при отсутствующей проверке».
         run: |
-          cases=(cases/${{ inputs.bot }}-*.yaml)
-          if [ ! -e "${cases[0]}" ]; then
-            echo "кейсов cases/${{ inputs.bot }}-*.yaml нет" >&2
+          shopt -s nullglob
+          # Кейсы бота — по префиксу в имени файла.
+          cases=(cases/"$BOT"-*.yaml)
+          # Примеры префикса не имеют (booking-happy-path у бота bookingbot),
+          # поэтому относятся к боту по своему полю source. Отбираем по
+          # последнему сегменту пути — так совпадают и URL, и локальный путь.
+          # Тот же инвариант держит тест
+          # tests/test_catalog.py::test_пример_обязан_быть_отбираем_на_прогоне_бота:
+          # пример с source вне инвентаря ботов роняет CI фермы, а не молчит.
+          examples=()
+          for f in examples/*.yaml; do
+            if grep -qE "/botkit-${BOT}[[:space:]]*\$" "$f"; then
+              examples+=("$f")
+            fi
+          done
+          if [ ${#cases[@]} -eq 0 ] && [ ${#examples[@]} -eq 0 ]; then
+            echo "для бота $BOT нет ни cases/$BOT-*.yaml, ни примеров с source=$BOT" >&2
             exit 1
           fi
-          botkit-farm run "${cases[@]}" \
+          echo "кейсы: ${cases[*]:-нет}"
+          echo "примеры: ${examples[*]:-нет}"
+          botkit-farm run "${cases[@]}" "${examples[@]}" \
             --source "$GITHUB_WORKSPACE/${{ inputs.source }}" \
             --junit "$GITHUB_WORKSPACE/farm-smoke.xml"
 
