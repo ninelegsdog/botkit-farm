@@ -159,3 +159,31 @@ def test_каталог_репозитория_цел():
     examples = ROOT / "examples"
     assert check(examples) == []
     assert len(load(examples).regressions) >= 10
+
+
+def _repo_of(source: str) -> str:
+    """Имя репозитория из поля source: последний сегмент пути, без .git и /."""
+    return source.strip().rstrip("/").removesuffix(".git").rsplit("/", 1)[-1]
+
+
+def test_пример_обязан_быть_отбираем_на_прогоне_бота():
+    """Пример должен попадать в гейт своего бота, а не молча выпадать из него.
+
+    Прогон на PR бота (farm-smoke.yml) собирает кейсы по префиксу имени файла
+    и примеры по полю `source` — для каждого бота отдельно. Опечатка в `source`
+    (или ссылка на репозиторий вне инвентаря) не роняет отбор: файл просто не
+    найден, прогон зелёный, и «зелено» значит «не проверяли». Инвентарь берём
+    из кейсов: их `source` — те же репозитории ботов, и их же имена приходят
+    входом `bot` в CI, так что второй список имён не нужен.
+    """
+    from botkit_farm.case.loader import load_file
+
+    known = {_repo_of(load_file(p).source) for p in sorted((ROOT / "cases").glob("*.yaml"))}
+    assert len(known) >= 9, f"инвентарь ботов усох: {known}"
+
+    stray = {
+        p.name: load_file(p).source
+        for p in sorted((ROOT / "examples").glob("*.yaml"))
+        if _repo_of(load_file(p).source) not in known
+    }
+    assert stray == {}, f"примеры вне инвентаря ботов: {stray}"
