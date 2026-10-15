@@ -76,10 +76,20 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e .
 
-      # Без bubblewrap прогон чужого кода падает на SecurityError — лучше
-      # упасть здесь, на понятном шаге, а не внутри кейса.
-      - name: Песочница исполнения доступна
-        run: sudo apt-get update -qq && sudo apt-get install -y bubblewrap
+      # Изоляция включена (BOTKIT_FARM_SANDBOX=1), а включённая песочница, по
+      # контракту фермы, обязана работать: недоступная — это ошибка, не тихий
+      # отказ. Поэтому здесь и установка, и починка юзернеймспейсов, и живая
+      # проверка bwrap — иначе кейсы падают невнятным "setting up uid map".
+      - name: Песочница исполнения пригодна
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y bubblewrap
+          # Ubuntu 24.04 (в том числе runners) закрывает непривилегированные
+          # user namespaces через AppArmor: bwrap без этого падает на uid map.
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
+          sudo sysctl -w kernel.unprivileged_userns_clone=1 || true
+          # Настройке не верим на слово — проверяем тем же вызовом, что делает
+          # ферма. Провал здесь честнее провала внутри кейса.
+          bwrap --ro-bind / / --dev /dev --proc /proc --unshare-all --share-net true
 
       - name: Офлайн-прогоны по коду из чекаута
         working-directory: farm
