@@ -77,6 +77,10 @@
 ### Fixed
 
 
+- `doctor` всегда показывал ложный DEGRADED по кадру: `run_checks` (async) звал
+  `check_frame_support` с синхронным API Playwright прямо в работающем цикле, а
+  тот падает с «Sync API inside the asyncio loop». Chromium при этом запускался.
+  Блокирующая проверка теперь уходит в отдельный поток (`asyncio.to_thread`).
 - Путь БД ломался при относительном `bot_dir`: `work_dir` теперь передаётся
   явно, а `bot_dir` приводится к абсолютному пути.
 - Всплывающие уведомления (`answerCallbackQuery`) терялись и не попадали в

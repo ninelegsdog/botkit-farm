@@ -20,6 +20,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import os
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -532,7 +533,12 @@ async def run_checks(
     checks.append(await check_redis(redis_url))
     checks.append(check_cases(root))
     checks.extend(check_dirs(root))
-    checks.append(check_frame_support(root))
+    # check_frame_support использует синхронный API Playwright, а мы — внутри
+    # работающего цикла asyncio. Звать его прямо здесь нельзя: sync Playwright
+    # падает с "Sync API inside the asyncio loop", и doctor всегда показывает
+    # ложный DEGRADED «Chromium не запускается», даже когда запускается.
+    # Уводим блокирующую проверку в отдельный поток.
+    checks.append(await asyncio.to_thread(check_frame_support, root))
     checks.append(check_isolation())
     checks.append(check_webhook_ports(root))
     return Report(checks=tuple(checks))
