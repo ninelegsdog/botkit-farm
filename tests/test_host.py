@@ -241,8 +241,8 @@ def test_шаг_choice_доходит_до_хоста_вместе_с_вариа
 
     def fake_run(cmd: list[str], **kw: object) -> SimpleNamespace:
         script = pathlib.Path(cmd[-1])
-        seen["script"] = script.read_text(encoding="utf-8")
         seen["steps"] = json.loads((script.parent / "steps.json").read_text(encoding="utf-8"))
+        seen["script"] = script.read_text(encoding="utf-8")
         (script.parent / "result.json").write_text("[]", encoding="utf-8")
         return SimpleNamespace(returncode=0, stdout="", stderr="")
 
@@ -260,11 +260,11 @@ def test_шаг_choice_доходит_до_хоста_вместе_с_вариа
         farm_src=tmp_path,
         bot_python=tmp_path / "py",
         bot_dir=tmp_path / "bot",
-        adapter_module="botkit_farm.adapters.newgen",
+        adapter_module="botkit_farm.adapters.legacy",
         adapter_attr="build",
         raw=False,
         mode="polling",
-        port=8100,
+        port=8200,
         fixture=None,
         steps=steps,
         db_path=tmp_path / "b.db",
@@ -273,3 +273,42 @@ def test_шаг_choice_доходит_до_хоста_вместе_с_вариа
     assert seen["steps"] == steps
     assert "def _available(" in seen["script"]
     assert 'if kind == "choice":' in seen["script"]
+
+
+def test_хост_строит_актёра_через_мост_а_не_сырой_Actor(
+    tmp_path: pathlib.Path, monkeypatch
+) -> None:
+    """Хост обязан звать `scene.actor_from_config`, а не `Actor(name=...).
+
+    Регресс: шаблон хоста строил `scene.Actor(user_id=..., name=...)`, но у сцены
+    нет поля `name` — мультиактёрный кейс падал в рантайме, а тест этого не видел,
+    потому что мокал run_bot. Проверяем текст шаблона, что ошибка не вернётся.
+    """
+    seen: dict[str, object] = {}
+    monkeypatch.delenv("BOTKIT_FARM_SANDBOX", raising=False)
+
+    def fake_run(cmd: list[str], **kw: object) -> SimpleNamespace:
+        script = pathlib.Path(cmd[-1])
+        seen["script"] = script.read_text(encoding="utf-8")
+        (script.parent / "result.json").write_text("[]", encoding="utf-8")
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(host.subprocess, "run", fake_run)
+
+    host.run_bot(
+        farm_src=tmp_path,
+        bot_python=tmp_path / "py",
+        bot_dir=tmp_path / "bot",
+        adapter_module="botkit_farm.adapters.newgen",
+        adapter_attr="build",
+        raw=False,
+        mode="polling",
+        port=8300,
+        fixture=None,
+        steps=[],
+        db_path=tmp_path / "b.db",
+    )
+
+    script_text = seen["script"]
+    assert "scene.actor_from_config" in script_text
+    assert "Actor(user_id=" not in script_text

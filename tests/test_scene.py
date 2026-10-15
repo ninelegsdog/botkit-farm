@@ -102,3 +102,27 @@ def test_сырой_update_не_делит_состояние_с_объекто�
 
     assert obj.message is not None
     assert obj.message.text == "привет"
+
+
+# ── актёры: мост кейс → сцена (ТЗ C3) ───────────────────────────────────────
+
+
+def test_actor_из_конфига_кейса() -> None:
+    """`name` модели кейса становится `first_name` сцены.
+
+    Регресс: раньше хост строил `scene.Actor(user_id=..., name=...)`, но у сцены
+    нет поля `name` — любой мультиактёрный кейс падал на запуске с TypeError.
+    Мост живёт в `actor_from_config`, и этот тест держит стык.
+    """
+    a = scene.actor_from_config({"user_id": 1001, "name": "Client", "is_bot": False})
+
+    assert a.user_id == 1001
+    assert a.is_bot is False
+    assert a.to_aiogram_user().first_name == "Client"
+
+
+def test_actor_без_имени_получает_запасное() -> None:
+    """aiogram требует непустой first_name: пустой name не должен ронять Update."""
+    a = scene.actor_from_config({"user_id": 7})
+
+    assert a.to_aiogram_user().first_name
