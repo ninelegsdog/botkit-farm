@@ -132,6 +132,7 @@ to run**. The checks are split into two levels, and the split is not decorative:
 - **[docs/authoring-cases.md](docs/authoring-cases.md)** — Authoring Cases.
 - **[docs/limitations.md](docs/limitations.md)** — Limitations.
 - **[docs/security.md](docs/security.md)** — Security.
+- **[README-testing.md](README-testing.md)** — the layers of tests (offline farm, live infra smokes, live Telegram) and the boundary between them (Russian).
 - **[CHANGELOG.md](CHANGELOG.md)** — what changed, and when.
 - **[CONTRIBUTING.md](CONTRIBUTING.md)** — how to set up, what CI checks.
 - **[SECURITY.md](SECURITY.md)** — how to report a vulnerability.
