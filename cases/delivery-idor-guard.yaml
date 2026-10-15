@@ -1,0 +1,23 @@
+schema_version: 1
+id: delivery-idor-guard
+title: delivery — гость шлёт админский callback_data и молчит (IDOR)
+source: https://github.com/ninelegsdog/botkit-delivery
+builder: newgen
+fixture: delivery
+seed: true
+tags:
+- regression
+- security
+actors:
+  guest:
+    user_id: 555000111
+    name: Гость
+steps:
+# `order_cancel` обслуживается без фильтра состояния, поэтому гость его
+# доносит до обработчика гарантированно: остановить его может только is_admin.
+# Без гарда бот отвечает «Отменено.» и открывает админ-меню — это и ловит кейс.
+# Шаг шлёт сырые callback_data: у гостя такой кнопки нет и быть не может.
+- callback: order_cancel
+  as: guest
+  expect:
+    silent: true

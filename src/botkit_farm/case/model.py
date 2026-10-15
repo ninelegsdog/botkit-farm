@@ -159,17 +159,23 @@ class Step(Strict):
     inline-кнопку). `click` принимает подпись кнопки, а не callback_data:
     подпись — это то, что видит человек в Telegram, и тест-кейс должен
     проверять интерфейс, а не внутреннее состояние FSM бота.
+    Исключение — `callback`: он шлёт сырые `callback_data` и проверяет отказ
+    на подделку; разрешён только в кейсах с тегом `security` или `edge`.
     """
 
     send: str | None = Field(default=None, max_length=MAX_TEXT)
     click: str | None = Field(default=None, max_length=256)
+    # Сырой callback_data: клиент шлёт то, чего бот в кнопках не предлагал.
+    # click жмёт только показанное ботом и потому не видит подделку — а атака
+    # начинается именно там, где клиент посылает несуществующую кнопку (IDOR).
+    callback: str | None = Field(default=None, max_length=256)
     # Нажать кнопку по позиции, а не по подписи: first | last | 0 | 1 | ...
     # Нужно там, где бот показывает то, что клиент не знает заранее, — даты,
     # идентификаторы, слоты. Зашивать их в кейс нельзя: завтра они изменятся,
     # и кейс упадёт не из-за кода бота, а из-за своей устаревшей копии.
     pick: str | None = Field(default=None, pattern=r"^(first|last|[0-9]+)$")
     # Несколько допустимых действий — выполняется первое доступное (ТЗ C6).
-    # Пусто и вместе с send/click/pick запрещено: шаг делает ровно одно.
+    # Пусто и вместе с send/click/pick/callback запрещено: шаг делает ровно одно.
     choice: list[Branch] | None = None
     # Сколько раз повторить шаг (ТЗ C6). Действия внутри переменно получают `i`
     # (с нуля) и `n` (всего повторов) — так корзина из пяти товаров пишется
@@ -193,11 +199,11 @@ class Step(Strict):
 
     @model_validator(mode="after")
     def _одно_действие(self) -> Step:
-        given = [x for x in (self.send, self.click, self.pick) if x is not None]
+        given = [x for x in (self.send, self.click, self.pick, self.callback) if x is not None]
         has_choice = bool(self.choice)
         if len(given) + int(has_choice) != 1:
             raise ValueError(
-                "шаг должен быть ровно один из send, click, pick или choice — "
+                "шаг должен быть ровно один из send, click, pick, callback или choice — "
                 "не несколько и не ни одного"
             )
         if self.send is not None and not self.send.strip():
@@ -208,6 +214,8 @@ class Step(Strict):
         """Человекочитаемое имя шага для отчёта и ошибок."""
         if self.click is not None:
             return f"нажать «{self.click}»"
+        if self.callback is not None:
+            return f"послать сырой callback «{self.callback}»"
         if self.pick is not None:
             return f"нажать кнопку {self.pick}"
         if self.choice:
@@ -309,6 +317,24 @@ class Case(Strict):
             raise ValueError(
                 "ни на одном шаге нет ожидания: такой кейс не может упасть, "
                 "а значит не доказывает ничего"
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _сырой_callback_только_под_контролем(self) -> Case:
+        """Шаг `callback` требует тега `security` или `edge`.
+
+        Сырой `callback_data` может вызвать действие, недостижимое обычным
+        кейсом, поэтому им проверяют отказ, а не обычный путь. Правило то же,
+        что в `ops/e2e`: неизвестные действия проходят только через allowlist.
+        Без тега кейс с сырым callback ломал бы это правило молча.
+        """
+        raw = [s for s in self.steps if s.callback is not None]
+        if raw and not ({"security", "edge"} & set(self.tags)):
+            raise ValueError(
+                "шаг с сырым callback_data допустим только в кейсе с тегом "
+                "'security' или 'edge': подделанный callback_data проверяет "
+                "отказ, а не обычный путь"
             )
         return self
 

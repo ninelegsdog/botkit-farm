@@ -194,6 +194,93 @@ def test_неизвестный_тег_отвергается():
         )
 
 
+def test_сырой_callback_принимается_под_тегом_security():
+    """Callback в кейсе — это подделка нажатия; в обычном кейсе ему не место."""
+    case = Case.model_validate(
+        {
+            "id": "x-y",
+            "title": "IDOR",
+            "source": ".",
+            "tags": ["security"],
+            "steps": [{"callback": "order_cancel", "expect": {"silent": True}}],
+        }
+    )
+
+    assert case.steps[0].callback == "order_cancel"
+
+
+def test_сырой_callback_принимается_под_тегом_edge():
+    Case.model_validate(
+        {
+            "id": "x-y",
+            "title": "Край",
+            "source": ".",
+            "tags": ["edge"],
+            "steps": [{"callback": "order_cancel", "expect": {"silent": True}}],
+        }
+    )
+
+
+def test_сырой_callback_без_security_тега_отвергается():
+    """Без тега кейс с сырым callback разрешил бы проверку записи молча."""
+    with pytest.raises(ValueError, match="callback_data допустим только"):
+        Case.model_validate(
+            {
+                "id": "x-y",
+                "title": "IDOR без тега",
+                "source": ".",
+                "steps": [{"callback": "order_cancel", "expect": {"silent": True}}],
+            }
+        )
+
+
+def test_сырой_callback_и_клик_вместе_отвергаются():
+    with pytest.raises(ValueError, match="ровно один из send, click, pick, callback"):
+        Case.model_validate(
+            {
+                "id": "x-y",
+                "title": "Два действия",
+                "source": ".",
+                "tags": ["security"],
+                "steps": [
+                    {
+                        "callback": "order_cancel",
+                        "click": "Отмена",
+                        "expect": {"silent": True},
+                    }
+                ],
+            }
+        )
+
+
+def test_сырой_callback_в_ветке_choice_отвергается():
+    """Ветка choice — кнопки, которые бот предлагает; сырой callback — шаг."""
+    with pytest.raises(ValueError):
+        Case.model_validate(
+            {
+                "id": "x-y",
+                "title": "Ветка",
+                "source": ".",
+                "tags": ["security"],
+                "steps": [{"choice": [{"callback": "order_cancel"}], "expect": {"silent": True}}],
+            }
+        )
+
+
+def test_подпись_шага_называет_сырой_callback():
+    case = Case.model_validate(
+        {
+            "id": "x-y",
+            "title": "Подпись",
+            "source": ".",
+            "tags": ["security"],
+            "steps": [{"callback": "order_cancel", "expect": {"silent": True}}],
+        }
+    )
+
+    assert case.steps[0].label() == "послать сырой callback «order_cancel»"
+
+
 def _кейс_с_builder(builder: str) -> Case:
     return Case.model_validate(
         {

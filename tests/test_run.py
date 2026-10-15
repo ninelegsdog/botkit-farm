@@ -159,6 +159,27 @@ def test_выбор_из_списка_даёт_вид_pick() -> None:
     ]
 
 
+def test_сырой_callback_даёт_вид_callback_и_свою_подпись() -> None:
+    case = Case.model_validate(
+        {
+            "id": "case-id",
+            "title": "Тестовый кейс",
+            "source": ".",
+            "tags": ["security"],
+            "steps": [{"callback": "order_cancel", "expect": {"silent": True}}],
+        }
+    )
+
+    assert engine._to_steps(engine._plan(case), 2.5) == [
+        {
+            "kind": "callback",
+            "value": "order_cancel",
+            "label": "послать сырой callback «order_cancel»",
+            "gap": 2.5,
+        }
+    ]
+
+
 def test_заметка_шага_не_подменяет_его_подпись() -> None:
     """Подпись строит сам шаг (что делает бот); заметка — пояснение для человека."""
     case = Case.model_validate(
