@@ -1,0 +1,39 @@
+schema_version: 1
+id: membership-admin-flow
+title: membership — админ/гость и callback require_admin+wraps
+source: https://github.com/ninelegsdog/botkit-membership
+builder: legacy
+fixture: membership
+seed: true
+tags:
+- regression
+- security
+actors:
+  admin:
+    user_id: 424242
+    name: Админ
+  guest:
+    user_id: 555000111
+    name: Гость
+steps:
+- send: /admin
+  as: guest
+  expect:
+    text_contains:
+    - пароль
+- send: /admin
+  as: admin
+  expect:
+    text_contains:
+    - Админ-панель клуба
+    buttons_contains:
+    - 💳 Тарифы
+    - 📚 Контент
+    - 👥 Участники
+    - 📊 Опросы
+    - 📣 Рассылка
+- click: 💳 Тарифы
+  as: admin
+  expect:
+    text_contains:
+    - Тарифы

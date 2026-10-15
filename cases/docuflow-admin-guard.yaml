@@ -1,0 +1,27 @@
+schema_version: 1
+id: docuflow-admin-guard
+title: docuflow — не-админ не может нажимать админ-кнопку
+source: https://github.com/ninelegsdog/botkit-docuflow
+builder: newgen
+fixture: docuflow
+seed: true
+tags:
+- regression
+- security
+actors:
+  admin:
+    user_id: 424242
+    name: Админ
+  guest:
+    user_id: 555000111
+    name: Гость
+steps:
+- send: 📊 Статистика
+  as: guest
+  expect:
+    silent: true
+- send: 📊 Статистика
+  as: admin
+  expect:
+    text_contains:
+    - 📊 Статистика

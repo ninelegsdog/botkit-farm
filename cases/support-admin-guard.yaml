@@ -1,0 +1,37 @@
+schema_version: 1
+id: support-admin-guard
+title: 'support — gate-only: не-админ молчит, админ авторизуется паролем'
+source: https://github.com/ninelegsdog/botkit-support
+builder: newgen
+fixture: support
+seed: true
+tags:
+- regression
+- security
+actors:
+  admin:
+    user_id: 424242
+    name: Админ
+  guest:
+    user_id: 555000111
+    name: Гость
+steps:
+- send: 📊 Статистика
+  as: guest
+  expect:
+    silent: true
+- send: /admin
+  as: admin
+  expect:
+    text_contains:
+    - Введите пароль
+- send: farm
+  as: admin
+  expect:
+    text_contains:
+    - Добро пожаловать
+- send: 📊 Статистика
+  as: admin
+  expect:
+    text_contains:
+    - 📊 Статистика

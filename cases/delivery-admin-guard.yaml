@@ -1,0 +1,27 @@
+schema_version: 1
+id: delivery-admin-guard
+title: delivery — не-админ не проходит по guarded callback/reply (IDOR)
+source: https://github.com/ninelegsdog/botkit-delivery
+builder: newgen
+fixture: delivery
+seed: true
+tags:
+- regression
+- security
+actors:
+  admin:
+    user_id: 424242
+    name: Админ
+  guest:
+    user_id: 555000111
+    name: Гость
+steps:
+- send: ➕ Новый заказ
+  as: guest
+  expect:
+    silent: true
+- send: ➕ Новый заказ
+  as: admin
+  expect:
+    text_contains:
+    - Номер заказа

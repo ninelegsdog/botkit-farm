@@ -1,0 +1,27 @@
+schema_version: 1
+id: leadgen-admin-guard
+title: leadgen — админ-guard на reply-кнопках
+source: https://github.com/ninelegsdog/botkit-leadgen
+builder: newgen
+fixture: leadgen
+seed: true
+tags:
+- regression
+- security
+actors:
+  admin:
+    user_id: 424242
+    name: Админ
+  guest:
+    user_id: 555000111
+    name: Гость
+steps:
+- send: 📊 Статистика
+  as: guest
+  expect:
+    silent: true
+- send: 📊 Статистика
+  as: admin
+  expect:
+    text_contains:
+    - 📊 Статистика

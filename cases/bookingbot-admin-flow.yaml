@@ -1,0 +1,37 @@
+schema_version: 1
+id: bookingbot-admin-flow
+title: bookingbot — админ/гость и callback через require_admin+wraps
+source: https://github.com/ninelegsdog/botkit-bookingbot
+builder: legacy
+fixture: bookingbot
+seed: true
+tags:
+- regression
+- security
+actors:
+  admin:
+    user_id: 424242
+    name: Админ
+  guest:
+    user_id: 555000111
+    name: Гость
+steps:
+- send: /admin
+  as: guest
+  expect:
+    text_contains:
+    - пароль
+- send: /admin
+  as: admin
+  expect:
+    text_contains:
+    - Админ-панель
+    buttons_contains:
+    - 📋 Услуги
+    - 📅 Расписание
+    - 🗓 Записи
+- click: 📋 Услуги
+  as: admin
+  expect:
+    text_contains:
+    - Услуги
