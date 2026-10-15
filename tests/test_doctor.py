@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import socket
+import threading
 from pathlib import Path
 from typing import Any
 
@@ -441,6 +442,40 @@ async def test_сборка_передаёт_адрес_redis_и_окружен�
 
     assert seen["redis_url"] == "redis://127.0.0.1:6399/0"
     assert report.ok is True
+
+
+@pytest.mark.asyncio
+async def test_проверка_кадра_уходит_из_потока_цикла(tmp_path: Path, monkeypatch) -> None:
+    """Sync Playwright нельзя звать внутри работающего цикла asyncio.
+
+    Регресс: `run_checks` (async) звал `check_frame_support` (sync Playwright)
+    прямо в цикле — chromium всегда «не запускался», и doctor показывал ложный
+    DEGRADED «кадр не снимется», даже когда кадр снимается. Проверяем, что
+    блокирующая проверка уходит в отдельный поток.
+    """
+    _farm(tmp_path, _good_case())
+    loop_thread = threading.get_ident()
+    seen: dict[str, int] = {}
+
+    def fake_frame(root: Path) -> Check:
+        seen["thread"] = threading.get_ident()
+        return Check("frame", True, Level.DEGRADED, "кадр есть", "причина", "")
+
+    monkeypatch.setattr(doctor, "check_frame_support", fake_frame)
+    monkeypatch.setattr(
+        doctor,
+        "check_isolation",
+        lambda: Check("isolation", True, Level.DEGRADED, "есть", "причина", ""),
+    )
+
+    async def fake_redis(url: str = "") -> Check:
+        return Check("redis", True, Level.BLOCKER, "отвечает", "причина", "")
+
+    monkeypatch.setattr(doctor, "check_redis", fake_redis)
+
+    await doctor.run_checks(tmp_path, env={})
+
+    assert seen["thread"] != loop_thread
 
 
 def test_cli_печатает_отчёт_и_возвращает_код_блокера(monkeypatch, capsys) -> None:
