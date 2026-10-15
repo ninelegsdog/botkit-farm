@@ -302,7 +302,9 @@ async def _shoot(case: Any, result: CaseResult) -> None:
         print(f"      ⚠️  кадр не снялся: {type(exc).__name__}: {exc}")
 
 
-async def _run_one(case_path: pathlib.Path, ref: str | None) -> CaseResult | None:
+async def _run_one(
+    case_path: pathlib.Path, ref: str | None, source: str | None = None
+) -> CaseResult | None:
     from botkit_farm.case.loader import CaseError
 
     try:
@@ -314,7 +316,10 @@ async def _run_one(case_path: pathlib.Path, ref: str | None) -> CaseResult | Non
     print(f"▶ {case.id}: {case.title}")
     security.block_egress()  # после клона — офлайн
     try:
-        src = await asyncio.to_thread(prepare, case.source, BOTS_DIR, ref=ref)
+        # source с командной строки выше case.source: CI уже выкачал репозиторий
+        # и клонировал бы дефолтную ветку — то есть проверял не то, что меняется
+        # в PR. Зелёный прогон обязан доказывать код из чекаута, а не main.
+        src = await asyncio.to_thread(prepare, source or case.source, BOTS_DIR, ref=ref)
         print(f"  код: {src.path}{' (клон)' if src.was_cloned else ' (локальная копия)'}")
         result = await asyncio.to_thread(
             run_case,
@@ -384,7 +389,7 @@ async def _run(args: argparse.Namespace) -> int:
     started = time.monotonic()
     results: list[CaseResult] = []
     for path in paths:
-        r = await _run_one(path, args.ref)
+        r = await _run_one(path, args.ref, args.source)
         if r is not None:
             results.append(r)
 
@@ -440,6 +445,12 @@ def main(argv: list[str] | None = None) -> int:
     p_run.add_argument("--tag", help="только кейсы с этим тегом")
     p_run.add_argument("--ref", help="ветка/тег для клонирования")
     p_run.add_argument("--pack", help="каталог пака или репозиторий бота с .botkit-farm")
+    p_run.add_argument(
+        "--source",
+        help="код бота брать отсюда, а не из case.source. Нужно CI: репозиторий "
+        "уже в чекауте, а клон из case.source дал бы дефолтную ветку и прогон "
+        "не того кода",
+    )
     p_run.add_argument(
         "--junit",
         metavar="ПУТЬ",

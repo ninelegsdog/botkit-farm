@@ -12,6 +12,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import pathlib
 import subprocess
 import time
@@ -20,14 +21,14 @@ from typing import Any
 
 import pytest
 
-from botkit_farm import security
+from botkit_farm import cli, security
 from botkit_farm.adapters import registry as adapters
 from botkit_farm.adapters.registry import AdapterRef
 from botkit_farm.case.model import Case
 from botkit_farm.runner import engine, parallel
 from botkit_farm.runner.contract import StepTurn, parse_turns
 from botkit_farm.runner.host import ExecResult
-from botkit_farm.runner.result import Status
+from botkit_farm.runner.result import CaseResult, Status
 
 # ── _api_port: свой порт на бота ─────────────────────────────────────────────
 
@@ -937,3 +938,56 @@ def test_шаги_содержат_as_когда_заданы_actors(tmp_path, m
     assert steps is not None
     assert len(steps) == 1
     assert steps[0].get("as") == "client"
+
+
+# ── --source: CI отдаёт свой чекаут ──────────────────────────────────────────
+
+
+def test_source_с_командной_строки_переопределяет_источник_кейса(
+    tmp_path: pathlib.Path, monkeypatch
+) -> None:
+    """CI выкачивает репозиторий сам — брать его, а не клон из case.source.
+
+    Иначе PR бота прогонял бы код дефолтной ветки, и зелёный прогон доказывал
+    бы не то, что менялось в PR: проверяем, что override доходит до prepare,
+    а без него берётся штатный источник кейса.
+    """
+    case_file = tmp_path / "c.yaml"
+    case_file.write_text(
+        "id: x-y\n"
+        "title: Источник\n"
+        "source: https://github.com/ninelegsdog/botkit-delivery\n"
+        "steps:\n"
+        "- send: /start\n"
+        "  expect:\n"
+        "    silent: true\n",
+        encoding="utf-8",
+    )
+    seen: dict[str, object] = {}
+    checkout = tmp_path / "checkout"
+
+    def fake_prepare(source: str, sandbox: pathlib.Path, *, ref: str | None = None):
+        seen["source"] = source
+        return SimpleNamespace(path=sandbox / "bot", was_cloned=False)
+
+    def fake_run_case(case: Case, **kw: Any) -> CaseResult:
+        return CaseResult(case_id=case.id, title=case.title, status=Status.PASSED)
+
+    async def fake_shoot(case: Any, result: CaseResult) -> None:
+        return None
+
+    monkeypatch.setattr(cli, "prepare", fake_prepare)
+    monkeypatch.setattr(cli, "run_case", fake_run_case)
+    monkeypatch.setattr(cli, "_shoot", fake_shoot)
+    monkeypatch.setattr(cli, "write_report", lambda result, d: SimpleNamespace(name="r.md"))
+    monkeypatch.setattr(cli.security, "block_egress", lambda: None)
+    monkeypatch.setattr(cli.security, "allow_egress", lambda: None)
+
+    result = asyncio.run(cli._run_one(case_file, None, str(checkout)))
+    assert result is not None
+    assert seen["source"] == str(checkout)
+
+    seen.clear()
+    result = asyncio.run(cli._run_one(case_file, None))
+    assert result is not None
+    assert seen["source"] == "https://github.com/ninelegsdog/botkit-delivery"
