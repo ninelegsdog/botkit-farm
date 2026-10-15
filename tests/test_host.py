@@ -275,7 +275,7 @@ def test_шаг_choice_доходит_до_хоста_вместе_с_вариа
     assert 'if kind == "choice":' in seen["script"]
 
 
-def test_хост_строит_актёра_через_мост_а_не_сырой_Actor(
+def test_хост_строит_актёра_через_мост_а_не_сырой_актёр(
     tmp_path: pathlib.Path, monkeypatch
 ) -> None:
     """Хост обязан звать `scene.actor_from_config`, а не `Actor(name=...).
