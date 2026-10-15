@@ -1,0 +1,108 @@
+name: Farm smoke
+
+# Офлайн-прогоны фермы по коду бота из чекаута вызывающего workflow.
+#
+# Зачем это в CI бота, а не в самой ферме: кейсы `cases/<bot>-*.yaml` проверяют
+# авторизацию на **конкретном** коммите, который меняется в PR. Собранные
+# отдельно, они доказывали бы код main'а — то есть не доказывали бы ничего о
+# ветке. Поэтому здесь код берётся из чекаута (`--source`), а не клонируется
+# заново.
+#
+# Слой: Layer A — офлайн, секунды, фейковый Bot API. Живой прогон против
+# Telegram — это ops/e2e на стенде, здесь его нет и не нужно.
+
+on:
+  workflow_call:
+    inputs:
+      bot:
+        description: "Имя бота: выбирает кейсы cases/<bot>-*.yaml"
+        required: true
+        type: string
+      source:
+        description: "Путь к коду бота в чекауте вызывающего workflow"
+        required: false
+        type: string
+        default: "bot"
+
+# Карантин, как в CI самой фермы: прогон чужого кода идёт под bubblewrap.
+env:
+  BOTKIT_FARM_SANDBOX: "1"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    name: Ферма · ${{ inputs.bot }}
+    runs-on: ubuntu-latest
+    # Порт 6380 — тот же, что ферма передаёт ботам в REDIS_URL (см. cli.py):
+    # боты, которым нужен Redis, получают его на привычном адресе.
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6380:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    steps:
+      # Репозиторий бота — из вызывающего workflow, в отдельный каталог: ферма
+      # копирует исходники в свой sandbox, и общий корень поставил бы копию
+      # внутрь самой себя вместе с checkout'ом фермы.
+      - uses: actions/checkout@v5
+        with:
+          path: bot
+
+      - uses: actions/checkout@v5
+        with:
+          repository: ninelegsdog/botkit-farm
+          path: farm
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: farm/pyproject.toml
+
+      - name: Установить ферму
+        working-directory: farm
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+
+      # Без bubblewrap прогон чужого кода падает на SecurityError — лучше
+      # упасть здесь, на понятном шаге, а не внутри кейса.
+      - name: Песочница исполнения доступна
+        run: sudo apt-get update -qq && sudo apt-get install -y bubblewrap
+
+      - name: Офлайн-прогоны по коду из чекаута
+        working-directory: farm
+        # Глоб без совпадений — падение: кейсов нет, и молчание здесь означало
+        # бы «зелёный CI при отсутствующей проверке».
+        run: |
+          cases=(cases/${{ inputs.bot }}-*.yaml)
+          if [ ! -e "${cases[0]}" ]; then
+            echo "кейсов cases/${{ inputs.bot }}-*.yaml нет" >&2
+            exit 1
+          fi
+          botkit-farm run "${cases[@]}" \
+            --source "$GITHUB_WORKSPACE/${{ inputs.source }}" \
+            --junit "$GITHUB_WORKSPACE/farm-smoke.xml"
+
+      # Отчёт и кадр — единственное место, где видно, что именно упало.
+      - name: Отчёты прогона
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: farm-smoke-${{ inputs.bot }}
+          path: |
+            farm/reports/*.md
+            farm/reports/frames/*.png
+            farm-smoke.xml
+          if-no-files-found: ignore
