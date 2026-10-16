@@ -1,0 +1,29 @@
+schema_version: 1
+id: reminder-unsubscribe-stops
+title: reminder — отписка видима, неполучение рассылки уровень 1 не доказывает
+source: https://github.com/ninelegsdog/botkit-reminder
+builder: reminder
+fixture: reminder
+seed: true
+tags:
+- regression
+actors:
+  client:
+    user_id: 424243
+    name: Клиент
+steps:
+- send: /start
+  as: client
+  expect:
+    text_contains:
+    - ReminderBot
+- send: "🔔 Подписаться"
+  as: client
+  expect:
+    text_contains:
+    - Вы подписаны
+- send: "🔕 Отписаться"
+  as: client
+  expect:
+    text_contains:
+    - Вы отписались от рассылок
