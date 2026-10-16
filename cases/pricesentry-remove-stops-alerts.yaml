@@ -1,0 +1,43 @@
+schema_version: 1
+id: pricesentry-remove-stops-alerts
+title: pricesentry — убранная позиция исчезает из списка мониторинга
+source: https://github.com/ninelegsdog/botkit-pricesentry
+builder: newgen
+fixture: pricesentry
+seed: true
+tags:
+- regression
+actors:
+  client:
+    user_id: 424242
+    name: Иван П.
+steps:
+- send: /start
+  as: client
+  expect:
+    text_contains:
+    - Мониторинг цен
+- send: "📦 Мои товары"
+  as: client
+  expect:
+    text_contains:
+    - Кроссовки Runner Lite
+    buttons_contains:
+    - "❌ Удалить"
+- click: "❌ Удалить"
+  as: client
+  expect:
+    text_contains:
+    - Удалить товар
+    buttons_contains:
+    - "✅ Да"
+- click: "✅ Да"
+  as: client
+  expect:
+    text_contains:
+    - Товар удалён
+- send: "📦 Мои товары"
+  as: client
+  expect:
+    text_contains:
+    - Нет мониторинга

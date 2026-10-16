@@ -1,0 +1,30 @@
+schema_version: 1
+id: pricesentry-alert-on-change
+title: pricesentry — уведомление о снижении содержит было/стало
+source: https://github.com/ninelegsdog/botkit-pricesentry
+builder: newgen
+fixture: pricesentry
+seed: true
+tags:
+- regression
+actors:
+  client:
+    user_id: 424242
+    name: Иван П.
+steps:
+- send: /start
+  as: client
+  expect:
+    text_contains:
+    - Мониторинг цен
+- send: "🔔 Мои уведомления"
+  as: client
+  expect:
+    text_contains:
+    - Цена снизилась
+    - "5490.00 → 4990.00"
+- send: "📊 Статистика"
+  as: client
+  expect:
+    text_contains:
+    - Ваш
