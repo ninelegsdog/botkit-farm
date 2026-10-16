@@ -1,0 +1,36 @@
+schema_version: 1
+id: membership-expired-closes-access
+title: membership — истёкшая подписка не пускает в материалы клуба
+source: https://github.com/ninelegsdog/botkit-membership
+builder: legacy
+fixture: membership
+seed: true
+tags:
+- regression
+actors:
+  client:
+    user_id: 555000111
+    name: Бывший участник
+steps:
+- send: /start
+  as: client
+  expect:
+    text_contains:
+    - Добро пожаловать
+    buttons_contains:
+    - "📚 Контент"
+- click: "📚 Контент"
+  as: client
+  expect:
+    text_contains:
+    - Это для участников клуба
+- click: "👤 Моя подписка"
+  as: client
+  expect:
+    text_contains:
+    - У вас нет активной подписки
+- click: "⭐ Оформить подписку"
+  as: client
+  expect:
+    text_contains:
+    - Выберите тариф
