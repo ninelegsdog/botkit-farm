@@ -1,0 +1,90 @@
+schema_version: 1
+id: docuflow-repeat-keeps-version
+title: docuflow — вторая генерация не затирает первый документ
+source: https://github.com/ninelegsdog/botkit-docuflow
+builder: newgen
+fixture: docuflow
+seed: true
+tags:
+- regression
+actors:
+  client:
+    user_id: 424242
+    name: Иван П.
+steps:
+- send: /start
+  as: client
+  expect:
+    text_contains:
+    - Генерация документов
+- send: "📄 Создать документ"
+  as: client
+  expect:
+    text_contains:
+    - Выберите категорию
+- click: "Договоры"
+  as: client
+  expect:
+    text_contains:
+    - Выберите шаблон
+- click: "Договор оказания услуг"
+  as: client
+  expect:
+    text_contains:
+    - Поле 1/2
+- send: "ООО Ромашка"
+  as: client
+  expect:
+    text_contains:
+    - Поле 2/2
+- send: "45000"
+  as: client
+  expect:
+    text_contains:
+    - Проверьте данные
+- click: "✅ Сформировать"
+  as: client
+  expect:
+    text_contains:
+    - Выберите действие
+- send: "🗂 Мои документы"
+  as: client
+  expect:
+    text_contains:
+    - "📄 #1 —"
+- send: "📄 Создать документ"
+  as: client
+  expect:
+    text_contains:
+    - Выберите категорию
+- click: "Договоры"
+  as: client
+  expect:
+    text_contains:
+    - Выберите шаблон
+- click: "Договор оказания услуг"
+  as: client
+  expect:
+    text_contains:
+    - Поле 1/2
+- send: "ООО Тюльпан"
+  as: client
+  expect:
+    text_contains:
+    - Поле 2/2
+- send: "60000"
+  as: client
+  expect:
+    text_contains:
+    - Проверьте данные
+- click: "✅ Сформировать"
+  as: client
+  expect:
+    text_contains:
+    - Выберите действие
+- send: "🗂 Мои документы"
+  as: client
+  expect:
+    text_contains:
+    - "📄 #1 —"
+    - "📄 #2 —"
