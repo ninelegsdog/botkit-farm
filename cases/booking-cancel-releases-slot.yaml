@@ -1,0 +1,78 @@
+schema_version: 1
+id: booking-cancel-releases-slot
+title: bookingbot — отмена записи снимает её и освобождает слот
+source: https://github.com/ninelegsdog/botkit-bookingbot
+builder: legacy
+fixture: bookingbot
+seed: true
+tags:
+- regression
+actors:
+  client:
+    user_id: 424242
+    name: Иван П.
+steps:
+- send: /start
+  as: client
+  expect:
+    text_contains:
+    - Выберите действие
+- click: "📅 Записаться"
+  as: client
+  expect:
+    text_contains:
+    - Выберите услугу
+- click: "Стрижка и укладка — 60 мин, 2200₽"
+  as: client
+  expect:
+    text_contains:
+    - Выберите дату
+- pick: first
+  as: client
+  expect:
+    text_contains:
+    - Выберите время
+- pick: first
+  as: client
+  expect:
+    text_contains:
+    - Введите телефон
+- send: "+7 (999) 000-00-00"
+  as: client
+  expect:
+    text_contains:
+    - Запись #1 подтверждена
+- click: "🗓 Мои записи"
+  as: client
+  expect:
+    text_contains:
+    - "#1"
+    buttons_contains:
+    - "❌ Отменить #1"
+- click: "❌ Отменить #1"
+  as: client
+  expect:
+    text_contains:
+    - Запись отменена
+- click: "🗓 Мои записи"
+  as: client
+  expect:
+    text_contains:
+    - Нет активных записей
+- click: "📅 Записаться"
+  as: client
+  expect:
+    text_contains:
+    - Выберите услугу
+- click: "Стрижка и укладка — 60 мин, 2200₽"
+  as: client
+  expect:
+    text_contains:
+    - Выберите дату
+- pick: first
+  as: client
+  expect:
+    text_contains:
+    - Выберите время
+    buttons_contains:
+    - "10:00 — 11:00"
