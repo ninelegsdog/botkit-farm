@@ -1,0 +1,60 @@
+schema_version: 1
+id: delivery-status-change-notifies
+title: delivery — смена статуса уведомляет подписавшегося клиента
+source: https://github.com/ninelegsdog/botkit-delivery
+builder: newgen
+fixture: delivery
+seed: true
+tags:
+- regression
+actors:
+  client:
+    user_id: 555000111
+    name: Иван П.
+  admin:
+    user_id: 424242
+    name: Админ
+steps:
+- send: /start
+  as: client
+  expect:
+    text_contains:
+    - Отслеживание заказов
+- send: "🔍 Проверить заказ"
+  as: client
+  expect:
+    text_contains:
+    - Введите номер заказа
+- send: "DL-2041"
+  as: client
+  expect:
+    text_contains:
+    - Заказ #DL-2041
+- click: "🔔 Следить"
+  as: client
+  expect:
+    text_contains:
+    - Вы следите за этим заказом
+- send: "📦 Заказы"
+  as: admin
+  expect:
+    text_contains:
+    - "Статус: В работе"
+    buttons_contains:
+    - "▶️ Следующий"
+- click: "▶️ Следующий"
+  as: admin
+  expect:
+    text_contains:
+    - "Статус обновлён: Готов"
+    - статус →
+- send: "🔍 Проверить заказ"
+  as: client
+  expect:
+    text_contains:
+    - Введите номер заказа
+- send: "DL-2041"
+  as: client
+  expect:
+    text_contains:
+    - "Статус: Готов"
