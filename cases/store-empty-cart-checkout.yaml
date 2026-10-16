@@ -1,0 +1,25 @@
+schema_version: 1
+id: store-empty-cart-checkout
+title: store — пустая корзина отвечает «Корзина пуста», а не падает
+source: https://github.com/ninelegsdog/botkit-store
+builder: newgen
+fixture: store
+seed: true
+tags:
+- regression
+- edge
+actors:
+  client:
+    user_id: 424242
+    name: Иван П.
+steps:
+- send: /start
+  as: client
+  expect:
+    text_contains:
+    - Добро пожаловать в магазин
+- send: "🛒 Корзина"
+  as: client
+  expect:
+    text_contains:
+    - Корзина пуста
