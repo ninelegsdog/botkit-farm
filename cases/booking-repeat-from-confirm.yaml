@@ -1,0 +1,53 @@
+schema_version: 1
+id: booking-repeat-from-confirm
+title: bookingbot — кнопка «Записаться» из подтверждения возвращает в начало
+source: https://github.com/ninelegsdog/botkit-bookingbot
+builder: legacy
+fixture: bookingbot
+seed: true
+tags:
+- regression
+actors:
+  client:
+    user_id: 424242
+    name: Иван П.
+steps:
+- send: /start
+  as: client
+  expect:
+    text_contains:
+    - Выберите действие
+    buttons_contains:
+    - "📅 Записаться"
+- click: "📅 Записаться"
+  as: client
+  expect:
+    text_contains:
+    - Выберите услугу
+- click: "Стрижка и укладка — 60 мин, 2200₽"
+  as: client
+  expect:
+    text_contains:
+    - Выберите дату
+- pick: first
+  as: client
+  expect:
+    text_contains:
+    - Выберите время
+- pick: first
+  as: client
+  expect:
+    text_contains:
+    - Введите телефон
+- send: "+7 (999) 000-00-00"
+  as: client
+  expect:
+    text_contains:
+    - Запись #1 подтверждена
+    buttons_contains:
+    - "📅 Записаться"
+- click: "📅 Записаться"
+  as: client
+  expect:
+    text_contains:
+    - Выберите услугу

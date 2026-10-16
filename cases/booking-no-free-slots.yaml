@@ -1,0 +1,34 @@
+schema_version: 1
+id: booking-no-free-slots
+title: "bookingbot — нет свободных слотов: бот сообщает, диалог не роняет"
+source: https://github.com/ninelegsdog/botkit-bookingbot
+builder: legacy
+fixture: bookingbot_no_slots
+seed: true
+tags:
+- regression
+actors:
+  client:
+    user_id: 424242
+    name: Иван П.
+steps:
+- send: /start
+  as: client
+  expect:
+    text_contains:
+    - Выберите действие
+- click: "📅 Записаться"
+  as: client
+  expect:
+    text_contains:
+    - Выберите услугу
+- click: "Стрижка и укладка — 60 мин, 2200₽"
+  as: client
+  expect:
+    text_contains:
+    - Нет свободных дат
+- click: "📅 Записаться"
+  as: client
+  expect:
+    text_contains:
+    - Выберите услугу
