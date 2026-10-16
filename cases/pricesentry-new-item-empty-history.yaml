@@ -1,0 +1,65 @@
+schema_version: 1
+id: pricesentry-new-item-empty-history
+title: pricesentry — товар без истории показывает карточку, а не падает
+source: https://github.com/ninelegsdog/botkit-pricesentry
+builder: newgen
+fixture: pricesentry
+seed: true
+tags:
+- regression
+- edge
+actors:
+  client:
+    user_id: 424242
+    name: Иван П.
+steps:
+- send: /start
+  as: client
+  expect:
+    text_contains:
+    - Мониторинг цен
+- send: "➕ Добавить товар"
+  as: client
+  expect:
+    text_contains:
+    - Введите SKU
+- send: "WB-00001"
+  as: client
+  expect:
+    text_contains:
+    - Выберите маркетплейс
+- click: "Ozon"
+  as: client
+  expect:
+    text_contains:
+    - Название товара
+- send: "Термос Кемп"
+  as: client
+  expect:
+    text_contains:
+    - Целевая цена
+- send: "1590"
+  as: client
+  expect:
+    text_contains:
+    - Ссылка на товар
+- send: "-"
+  as: client
+  expect:
+    text_contains:
+    - Добавить товар?
+    buttons_contains:
+    - "✅ Добавить"
+- click: "✅ Добавить"
+  as: client
+  expect:
+    text_contains:
+    - Товар добавлен
+- send: "📦 Мои товары"
+  as: client
+  expect:
+    text_contains:
+    - Термос Кемп
+    - "0.00"
+    buttons_contains:
+    - "📊 История"
