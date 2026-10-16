@@ -1,0 +1,78 @@
+schema_version: 1
+id: leadgen-second-lead-keeps-first
+title: leadgen — вторая заявка не затирает первую
+source: https://github.com/ninelegsdog/botkit-leadgen
+builder: newgen
+fixture: leadgen
+seed: true
+tags:
+- regression
+actors:
+  client:
+    user_id: 555000111
+    name: Иван Тест
+  admin:
+    user_id: 424242
+    name: Менеджер
+steps:
+- send: /start
+  as: client
+  expect:
+    text_contains:
+    - Здравствуйте
+- send: "📝 Оставить заявку"
+  as: client
+  expect:
+    text_contains:
+    - Что вас интересует
+- click: "Лендинг под ключ"
+  as: client
+  expect:
+    text_contains:
+    - Как вас зовут
+- send: "Иван Тест"
+  as: client
+  expect:
+    text_contains:
+    - Телефон
+- send: "+79990001122"
+  as: client
+  expect:
+    text_contains:
+    - Подтвердите заявку
+- click: "✅ Отправить"
+  as: client
+  expect:
+    text_contains:
+    - Заявка отправлена
+- send: "📝 Оставить заявку"
+  as: client
+  expect:
+    text_contains:
+    - Что вас интересует
+- click: "Чат-бот для отдела продаж"
+  as: client
+  expect:
+    text_contains:
+    - Как вас зовут
+- send: "Мария Тест"
+  as: client
+  expect:
+    text_contains:
+    - Телефон
+- send: "+79990003344"
+  as: client
+  expect:
+    text_contains:
+    - Подтвердите заявку
+- click: "✅ Отправить"
+  as: client
+  expect:
+    text_contains:
+    - Заявка отправлена
+- send: "📋 Очередь лидов"
+  as: admin
+  expect:
+    text_contains:
+    - "Новый лид! #1"
+    - "Новый лид! #2"

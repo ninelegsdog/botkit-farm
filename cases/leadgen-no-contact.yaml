@@ -1,0 +1,49 @@
+schema_version: 1
+id: leadgen-no-contact
+title: leadgen — заявка без валидного контакта не принимается
+source: https://github.com/ninelegsdog/botkit-leadgen
+builder: newgen
+fixture: leadgen
+seed: true
+tags:
+- regression
+actors:
+  client:
+    user_id: 424242
+    name: Иван П.
+steps:
+- send: /start
+  as: client
+  expect:
+    text_contains:
+    - Здравствуйте
+- send: "📝 Оставить заявку"
+  as: client
+  expect:
+    text_contains:
+    - Что вас интересует
+- click: "Лендинг под ключ"
+  as: client
+  expect:
+    text_contains:
+    - Как вас зовут
+- send: "Иван Тест"
+  as: client
+  expect:
+    text_contains:
+    - Телефон
+- send: "89990002233"
+  as: client
+  expect:
+    text_contains:
+    - Неверный формат
+- send: "+79990001122"
+  as: client
+  expect:
+    text_contains:
+    - Подтвердите заявку
+- click: "❌ Отмена"
+  as: client
+  expect:
+    text_contains:
+    - Заявка отменена

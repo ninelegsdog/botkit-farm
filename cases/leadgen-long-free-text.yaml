@@ -1,0 +1,46 @@
+schema_version: 1
+id: leadgen-long-free-text
+title: leadgen — длинный свободный текст не роняет диалог
+source: https://github.com/ninelegsdog/botkit-leadgen
+builder: newgen
+fixture: leadgen
+seed: true
+tags:
+- regression
+- edge
+actors:
+  client:
+    user_id: 424242
+    name: Иван П.
+steps:
+- send: /start
+  as: client
+  expect:
+    text_contains:
+    - Здравствуйте
+- send: "📝 Оставить заявку"
+  as: client
+  expect:
+    text_contains:
+    - Что вас интересует
+- click: "Аудит отдела продаж"
+  as: client
+  expect:
+    text_contains:
+    - Как вас зовут
+- send: "Очень длинное имя клиента, написанное исключительно для проверки устойчивости диалога к длинному свободному вводу: бот обязан принять значение любого разумного размера, сохранить состояние формы и продолжить диалог, а не упасть с необработанным исключением и не прервать заполнение заявки на середине"
+  as: client
+  expect:
+    text_contains:
+    - Телефон
+- send: "+79990001122"
+  as: client
+  expect:
+    text_contains:
+    - Подтвердите заявку
+- click: "❌ Отмена"
+  as: client
+  expect:
+    text_contains:
+    - Заявка отменена
+    - Выберите действие
