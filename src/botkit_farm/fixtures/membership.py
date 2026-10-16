@@ -4,7 +4,7 @@
 
 * Писать только через API бота (`db.session()`), а не sqlite3 напрямую: схема
   принадлежит миграциям бота, и обход их — источник расхождений.
-* Данные вымышленные: ни одного реального имени, телефона или адреса.
+* Данные вымышленные: ни одного реального имени, телефона, адреса.
 * Минимум данных, который нужен сценарию. Лишние строки не помогают, зато
   мешают заметить, что сценарий пошёл не по той ветке.
 * Никаких зависимостей от текущего времени, кроме границ подписки: дата в кадре
@@ -48,6 +48,13 @@ SECTIONS = [
     ),
 ]
 
+# Второй участник — с истёкшей подпиской: кейс membership-expired-closes-access
+# проверяет, что такой участник не проходит в разделы. Отдельный user_id, а не
+# правка активной подписки первого: сценарии оформления и автопродления читают
+# её и не должны сломаться.
+EXPIRED_USER_ID = 555000111
+EXPIRED_NAME = "Бывший участник"
+
 
 async def seed(db: Any) -> None:
     import datetime as dt
@@ -83,6 +90,27 @@ async def seed(db: Any) -> None:
                 "uid": uid,
                 "s": (today - dt.timedelta(days=9)).isoformat(),
                 "e": (today + dt.timedelta(days=21)).isoformat(),
+            },
+        )
+    )
+    # Истёкший участник: срок в прошлом и статус expired. get_subscription
+    # фильтрует по status ('active'/'trial'/'grace'), поэтому здесь важно
+    # именно значение status — закрытие доступа проверяется синхронно, без
+    # фонового перевода (его на уровне 1 стенд не поднимает).
+    stmts.append(
+        (
+            "insert into subscribers (user_id, name, username, is_active) values (:uid,:n,'',1)",
+            {"uid": EXPIRED_USER_ID, "n": EXPIRED_NAME},
+        )
+    )
+    stmts.append(
+        (
+            "insert into subscriptions (user_id, plan_id, start_at, end_at, auto_renew, status) "
+            "values (:uid,1,:s,:e,0,'expired')",
+            {
+                "uid": EXPIRED_USER_ID,
+                "s": (today - dt.timedelta(days=33)).isoformat(),
+                "e": (today - dt.timedelta(days=3)).isoformat(),
             },
         )
     )
