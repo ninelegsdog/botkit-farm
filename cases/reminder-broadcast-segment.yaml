@@ -1,0 +1,66 @@
+schema_version: 1
+id: reminder-broadcast-segment
+title: reminder — рассылка доходит до активного подписчика
+source: https://github.com/ninelegsdog/botkit-reminder
+builder: reminder
+fixture: reminder
+seed: true
+tags:
+- regression
+actors:
+  subscriber:
+    user_id: 424243
+    name: Подписчик
+  lapsed:
+    user_id: 555000112
+    name: Отписавшийся
+  admin:
+    user_id: 424242
+    name: Админ
+steps:
+- send: /admin
+  as: admin
+  expect:
+    text_contains:
+    - Введите пароль
+- send: farm
+  as: admin
+  expect:
+    text_contains:
+    - Админ-доступ открыт
+- send: /start
+  as: subscriber
+  expect:
+    text_contains:
+    - ReminderBot
+- send: "🔔 Подписаться"
+  as: subscriber
+  expect:
+    text_contains:
+    - Вы подписаны
+- send: /start
+  as: lapsed
+  expect:
+    text_contains:
+    - ReminderBot
+- send: "🔔 Подписаться"
+  as: lapsed
+  expect:
+    text_contains:
+    - Вы подписаны
+- send: "🔕 Отписаться"
+  as: lapsed
+  expect:
+    text_contains:
+    - Вы отписались
+- send: "📣 Рассылки"
+  as: admin
+  expect:
+    text_contains:
+    - Введите текст рассылки
+- send: "Тренировка сегодня в 19:00"
+  as: admin
+  expect:
+    text_contains:
+    - Рассылка отправлена
+    - "Тренировка сегодня в 19:00"

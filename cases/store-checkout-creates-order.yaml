@@ -1,0 +1,63 @@
+schema_version: 1
+id: store-checkout-creates-order
+title: store — оформление корзины создаёт заказ и чистит корзину
+source: https://github.com/ninelegsdog/botkit-store
+builder: newgen
+fixture: store
+seed: true
+tags:
+- regression
+- smoke
+actors:
+  client:
+    user_id: 424242
+    name: Иван П.
+steps:
+- send: /start
+  as: client
+  expect:
+    text_contains:
+    - Добро пожаловать в магазин
+- send: "🛍 Каталог"
+  as: client
+  expect:
+    text_contains:
+    - Выберите категорию
+    buttons_contains:
+    - Шаблоны
+- click: Шаблоны
+  as: client
+  expect:
+    buttons_contains:
+    - "🛒 В корзину"
+- click: "🛒 В корзину"
+  as: client
+  expect:
+    text_contains:
+    - Добавлено в корзину
+- send: "🛒 Корзина"
+  as: client
+  expect:
+    text_contains:
+    - "🛒 Корзина:"
+    buttons_contains:
+    - "✅ Оформить"
+# Раньше кнопка только печатала «Оформление заказа»: заказ не создавался,
+# корзина не чистилась. Теперь — настоящий заказ и пустая корзина после.
+- click: "✅ Оформить"
+  as: client
+  expect:
+    text_contains:
+    - Заказ оформлен
+    - Оплата через Telegram Stars
+- send: "📦 Мои покупки"
+  as: client
+  expect:
+    text_contains:
+    - "📦 Заказ #"
+    - "Статус: ⏳ pending_payment"
+- send: "🛒 Корзина"
+  as: client
+  expect:
+    text_contains:
+    - Корзина пуста

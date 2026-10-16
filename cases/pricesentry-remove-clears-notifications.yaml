@@ -1,0 +1,109 @@
+schema_version: 1
+id: pricesentry-remove-clears-notifications
+title: pricesentry — удаление чистит уведомления, новая позиция без истории
+source: https://github.com/ninelegsdog/botkit-pricesentry
+builder: newgen
+fixture: pricesentry
+seed: true
+tags:
+- regression
+- edge
+actors:
+  client:
+    user_id: 424242
+    name: Иван П.
+steps:
+- send: /start
+  as: client
+  expect:
+    text_contains:
+    - Мониторинг цен
+# Фикстура сеет товар с историей и уведомлением о снижении цены.
+- send: "🔔 Мои уведомления"
+  as: client
+  expect:
+    text_contains:
+    - Цена снизилась
+- send: "📦 Мои товары"
+  as: client
+  expect:
+    text_contains:
+    - Кроссовки Runner Lite
+    buttons_contains:
+    - "❌ Удалить"
+- click: "❌ Удалить"
+  as: client
+  expect:
+    text_contains:
+    - Удалить товар
+    buttons_contains:
+    - "✅ Да"
+# Удаление должно снести не только товар, но и уведомления с историей:
+# без чистки alert оставался и продолжал показываться после удаления.
+- click: "✅ Да"
+  as: client
+  expect:
+    text_contains:
+    - удалён
+- send: "🔔 Мои уведомления"
+  as: client
+  expect:
+    text_contains:
+    - Нет уведомлений
+- send: "📦 Мои товары"
+  as: client
+  expect:
+    text_contains:
+    - Нет мониторинга
+# Новая позиция: карточка без истории открывает «📊 История» ответом
+# «Нет истории цен.» — список товаров пуст, лишних кнопок «История» нет.
+- send: "➕ Добавить товар"
+  as: client
+  expect:
+    text_contains:
+    - Введите SKU
+- send: "WB-00001"
+  as: client
+  expect:
+    text_contains:
+    - Выберите маркетплейс
+- click: "Ozon"
+  as: client
+  expect:
+    text_contains:
+    - Название товара
+- send: "Термос Кемп"
+  as: client
+  expect:
+    text_contains:
+    - Целевая цена
+- send: "1590"
+  as: client
+  expect:
+    text_contains:
+    - Ссылка на товар
+- send: "-"
+  as: client
+  expect:
+    text_contains:
+    - Добавить товар?
+    buttons_contains:
+    - "✅ Добавить"
+- click: "✅ Добавить"
+  as: client
+  expect:
+    text_contains:
+    - Товар добавлен
+- send: "📦 Мои товары"
+  as: client
+  expect:
+    text_contains:
+    - Термос Кемп
+    - "0.00"
+    buttons_contains:
+    - "📊 История"
+- click: "📊 История"
+  as: client
+  expect:
+    text_contains:
+    - Нет истории цен

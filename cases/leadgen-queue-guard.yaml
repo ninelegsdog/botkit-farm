@@ -1,0 +1,31 @@
+schema_version: 1
+id: leadgen-queue-guard
+title: leadgen — «Очередь лидов» отвечает только менеджеру или админу
+source: https://github.com/ninelegsdog/botkit-leadgen
+builder: newgen
+fixture: leadgen
+seed: true
+tags:
+- regression
+- security
+actors:
+  admin:
+    user_id: 424242
+    name: Админ
+  guest:
+    user_id: 555000111
+    name: Гость
+steps:
+# Кнопка «📋 Очередь лидов» живёт в manager_menu, но текст можно ввести вручную.
+# Раньше хендлер отдавал карточки заявок кому угодно; после guard'а 16.10 —
+# активный менеджер из таблицы managers либо админ, остальным — молчание.
+- send: "📋 Очередь лидов"
+  as: guest
+  expect:
+    silent: true
+# Админ — вторая сторона guard'а: очередь доступна; заявок в фикстуре нет.
+- send: "📋 Очередь лидов"
+  as: admin
+  expect:
+    text_contains:
+    - Нет новых лидов
