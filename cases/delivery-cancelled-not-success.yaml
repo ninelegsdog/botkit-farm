@@ -1,0 +1,67 @@
+schema_version: 1
+id: delivery-cancelled-not-success
+title: delivery — отмена создания заказа не выдаёт заказ за созданный
+source: https://github.com/ninelegsdog/botkit-delivery
+builder: newgen
+fixture: delivery
+seed: true
+tags:
+- regression
+actors:
+  admin:
+    user_id: 424242
+    name: Админ
+  client:
+    user_id: 555000111
+    name: Иван П.
+steps:
+- send: "➕ Новый заказ"
+  as: admin
+  expect:
+    text_contains:
+    - Номер заказа
+- send: "DL-7777"
+  as: admin
+  expect:
+    text_contains:
+    - Клиент
+- send: "demo_client"
+  as: admin
+  expect:
+    text_contains:
+    - Название заказа
+- send: "Демонстрационный заказ"
+  as: admin
+  expect:
+    text_contains:
+    - Начальный статус
+    buttons_contains:
+    - Принят
+- click: "Принят"
+  as: admin
+  expect:
+    text_contains:
+    - Создать заказ
+    buttons_contains:
+    - "❌ Отмена"
+- click: "❌ Отмена"
+  as: admin
+  expect:
+    text_contains:
+    - Отменено
+    - Выберите действие
+- send: /start
+  as: client
+  expect:
+    text_contains:
+    - Отслеживание заказов
+- send: "🔍 Проверить заказ"
+  as: client
+  expect:
+    text_contains:
+    - Введите номер заказа
+- send: "DL-7777"
+  as: client
+  expect:
+    text_contains:
+    - Заказ не найден

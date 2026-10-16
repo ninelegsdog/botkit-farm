@@ -1,0 +1,37 @@
+schema_version: 1
+id: delivery-bad-order-number
+title: delivery — неверный номер заказа даёт подсказку, диалог жив
+source: https://github.com/ninelegsdog/botkit-delivery
+builder: newgen
+fixture: delivery
+seed: true
+tags:
+- regression
+actors:
+  client:
+    user_id: 424242
+    name: Иван П.
+steps:
+- send: /start
+  as: client
+  expect:
+    text_contains:
+    - Отслеживание заказов
+- send: "🔍 Проверить заказ"
+  as: client
+  expect:
+    text_contains:
+    - Введите номер заказа
+- send: "ZZZ-999"
+  as: client
+  expect:
+    text_contains:
+    - Заказ не найден
+    - Проверьте номер
+- send: "DL-2041"
+  as: client
+  expect:
+    text_contains:
+    - Заказ #DL-2041
+    buttons_contains:
+    - "🔔 Следить"
