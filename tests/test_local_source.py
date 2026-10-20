@@ -35,21 +35,44 @@ def _case_sources() -> dict[str, str]:
     return out
 
 
-def test_каждый_url_кейс_находит_локальный_чекаут():
-    """--local обязан сработать для всех кейсов: иначе флаг есть, а пользы нет.
+def test_каждый_url_кейс_резолвится_в_свой_бот(tmp_path):
+    """--local обязан срабатывать для всех кейсов — проверяем отображение, а не диска.
 
-    Промах здесь — это бот, у которого кейс молча уходит в клон: ровно та
-    ловушка, ради которой --local и появился.
+    Различие принципиально: этот гейт держит «URL кейса соответствует каталогу
+    bots/<bot>», а не «на этой машине лежат клоны девяти ботов». У фермы в
+    собственном CI каталог `bots/` пуст — боты живут отдельными репозиториями и
+    клонируются под прогон, — поэтому проверка наличия клонов была бы красной
+    там, где всё правильно, и молча зелёной только у того, кто уже всё склонировал.
+
+    Здесь `bots_dir` подменяется временным, где создан каталог под каждый бот из
+    кейсов: так проверяется именно отображение URL → `bots/<repo-name>`. Промах
+    (опечатка в `source`, чужой хост, слипшийся путь) роняет тест, и это тот
+    промах, ради которого --local и появился.
     """
+    names = {src.rstrip("/").rsplit("/", 1)[-1] for src in _case_sources().values() if is_url(src)}
+    assert names, "в cases/ нет URL-кейсов — тест ничего не проверяет"
+    for name in names:
+        (tmp_path / name).mkdir()
+
     missing = []
     for cid, src in _case_sources().items():
         if not is_url(src):
             continue
-        if local_for(src, BOTS) is None:
-            missing.append(
-                f"{cid}: {src} -> нет каталога bots/{src.rstrip('/').rsplit('/', 1)[-1]}"
-            )
-    assert not missing, "у кейсов нет локального чекаута:\n" + "\n".join(missing)
+        got = local_for(src, tmp_path)
+        want = tmp_path / src.rstrip("/").rsplit("/", 1)[-1]
+        if got != want:
+            missing.append(f"{cid}: {src} -> {got}, ожидался {want}")
+    assert not missing, "URL кейса не отображается на свой каталог:\n" + "\n".join(missing)
+
+
+def test_отсутствие_чекаута_это_промах_а_не_клон(tmp_path):
+    """--local при отсутствующем чекауте обязан вернуть None, а не путь.
+
+    Это и есть ловушка, которую флаг закрывает: если local_for вернёт несуществующий
+    путь, вызывающий либо упадёт невнятно, либо откатится на клон — и разработчик
+    снова проверит чужой коммит, считая, что проверяет свой.
+    """
+    assert local_for("https://github.com/ninelegsdog/botkit-store", tmp_path) is None
 
 
 def test_негатив_чужой_url_не_резолвится():
@@ -62,9 +85,14 @@ def test_локальный_source_не_переписывается():
     assert local_for("./bots/botkit-store", BOTS) is None
 
 
-def test_чекаут_указывает_на_реальный_каталог():
-    """Возврат — каталог, а не имя: prepare() примет только существующий путь."""
-    path = local_for("https://github.com/ninelegsdog/botkit-store", BOTS)
+def test_чекаут_указывает_на_реальный_каталог(tmp_path):
+    """Возврат — существующий каталог, а не имя: prepare() примет только путь.
+
+    Каталог создаём во временном `bots_dir`: тест держит «возвращается именно
+    каталог», а не «на машине есть клон botkit-store» — второе в CI фермы неверно.
+    """
+    (tmp_path / "botkit-store").mkdir()
+    path = local_for("https://github.com/ninelegsdog/botkit-store", tmp_path)
     assert path is not None and path.is_dir()
 
 

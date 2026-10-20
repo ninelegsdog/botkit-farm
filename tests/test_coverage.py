@@ -23,6 +23,18 @@ from botkit_farm.coverage import CoverageError, Obligation, check, load
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 CASES = ROOT / "cases"
 
+# Боевой манифест лежит в `cases/`, а mutmut копирует в `mutants/` только исходники
+# (`source_paths`) и тесты — не данные кейсов. Без этого пропуска мутационный
+# прогон падал бы на «нет манифеста» в дереве, где его и не должно быть, и ронял
+# бы весь `mutation.yml` — красный по причине, не относящейся к мутантам.
+# Тесты ниже проверяют **данные** (`cases/coverage.json`), а не логику `coverage.py`,
+# поэтому в мутационном окружении им не место; в обычном CI `cases/` на месте.
+_ЕСТЬ_БОЕВЫЕ_ДАННЫЕ = CASES.is_dir() and (CASES / coverage.MANIFEST).is_file()
+без_боевых_данных = pytest.mark.skipif(
+    not _ЕСТЬ_БОЕВЫЕ_ДАННЫЕ,
+    reason="нет cases/coverage.json (мутационное дерево mutmut или отсутствие данных)",
+)
+
 POSITIVE_CASE = """
 id: {id}
 title: {title}
@@ -65,11 +77,13 @@ def _entry(bot: str, flow: str, case: str, kind: str) -> dict[str, str]:
 # ── боевой манифест ─────────────────────────────────────────────────────────
 
 
+@без_боевых_данных
 def test_боевое_покрытие_выполнено():
     """Реальные кейсы обязаны закрывать все объявленные потоки."""
     assert check(CASES) == []
 
 
+@без_боевых_данных
 def test_у_каждого_бота_есть_positive_поток():
     """Бот, покрытый только отказом, не доказывает, что умеет работать."""
     ob = load(CASES)
