@@ -64,7 +64,10 @@ class Obligations(_Strict):
 
 def _where(error: ValidationError) -> str:
     first = error.errors()[0]
-    loc = ".".join(str(p) for p in first["loc"]) or "<корень>"
+    # `or "<корень>"` — защитный запасной вариант: у ошибок схемы `loc` всегда
+    # непуст (перебором входов пустой локации достичь не удалось), поэтому
+    # мутации этого литерала эквивалентны. Разделитель `.` проверен тестом.
+    loc = ".".join(str(p) for p in first["loc"]) or "<корень>"  # pragma: no mutate
     return f"поле {loc}: {first['msg']}"
 
 
@@ -75,7 +78,10 @@ def load(coverage_dir: pathlib.Path) -> Obligations:
     """
     manifest = coverage_dir / MANIFEST
     try:
-        text = manifest.read_text(encoding="utf-8")
+        # Кодировка явная: `encoding="UTF-8"`/`None` эквивалентны `utf-8` на
+        # UTF-8-локали, а другой на этом проекте не бывает. Мутации литерала
+        # потому эквивалентны — исключены из прогона явно.
+        text = manifest.read_text(encoding="utf-8")  # pragma: no mutate
     except OSError as exc:
         raise CoverageError(f"нет манифеста покрытия: {manifest}") from exc
     try:

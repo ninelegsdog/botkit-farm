@@ -97,34 +97,63 @@ def test_у_каждого_бота_есть_positive_поток():
 
 
 def test_positive_привязан_к_gate_кейсу_ловится(tmp_path):
-    """Кейс-отказ под видом positive: работа потока не доказана — падение."""
+    """Кейс-отказ под видом positive: работа потока не доказана — падение.
+
+    Обещание positive на gate-кейсе и обещание gate на обычном кейсе — два
+    разных дефекта; сообщение первого обязано быть именно про positive.
+    """
     _write(tmp_path, "gate.yaml", positive=False, cid="only-gate")
     _manifest(tmp_path, [_entry("bot-x", "работа", "gate.yaml", "positive")])
     problems = check(tmp_path)
-    assert any("positive" in p and "gate" in p for p in problems), problems
+    assert any("обещает positive" in p and "gate" in p for p in problems), problems
 
 
 def test_gate_привязан_к_positive_кейсу_ловится(tmp_path):
-    """Обещали gate-кейс, а файл — обычный: гейт обязан заметить."""
+    """Обещали gate-кейс, а файл — обычный: сообщение именно про gate.
+
+    Мутант, заменивший `kind == "gate" and not gate` на `or`, добавил бы лишнее
+    positive-сообщение; тогда проблем стало бы две, и точная формулировка в
+    проверке выше перестала бы совпадать.
+    """
     _write(tmp_path, "ok.yaml", positive=True, cid="happy")
     _manifest(tmp_path, [_entry("bot-x", "отказ", "ok.yaml", "gate")])
     problems = check(tmp_path)
-    assert any("gate" in p for p in problems), problems
+    assert any("обещает gate" in p and "не является" in p for p in problems), problems
 
 
 def test_пропавший_кейс_ловится(tmp_path):
-    """Обязательство ссылается на файл, которого нет."""
-    _manifest(tmp_path, [_entry("bot-x", "работа", "нет.yaml", "positive")])
+    """Обязательство ссылается на файл, которого нет.
+
+    Два обязательства, и первое — пропавшее: ошибка обязана быть собрана, а
+    проверка второго продолжена. Мутант `continue`→`break` остановился бы на
+    первом и потерял вторую проблему (второе обязательство заведомо битое).
+    """
+    _write(tmp_path, "gate.yaml", positive=False, cid="only-gate")
+    _manifest(
+        tmp_path,
+        [
+            _entry("bot-x", "работа", "нет.yaml", "positive"),
+            _entry("bot-x", "отказ", "gate.yaml", "positive"),  # gate под видом positive
+        ],
+    )
     problems = check(tmp_path)
     assert any("пропал" in p for p in problems), problems
+    assert any("обещает positive" in p for p in problems), (
+        "обход обязан продолжиться после пропавшего кейса, иначе второй дефект "
+        f"(positive на gate-кейсе) потерян: {problems}"
+    )
 
 
 def test_бот_без_positive_ловится(tmp_path):
-    """Манифест, где у бота только gate, обязан упасть — молчание не покрытие."""
+    """Манифест, где у бота только gate, обязан упасть — молчание не покрытие.
+
+    Сообщение обязано называть **бота**: мутант, сгруппировавший всех под одним
+    ключом (`setdefault(None)`), теряет имя и делает диагностику бесполезной.
+    """
     _write(tmp_path, "gate.yaml", positive=False, cid="only-gate")
     _manifest(tmp_path, [_entry("bot-x", "отказ", "gate.yaml", "gate")])
     problems = check(tmp_path)
-    assert any("positive" in p for p in problems), problems
+    assert any("bot-x" in p and "positive" in p for p in problems), problems
 
 
 def test_нет_манифеста_не_зелёный(tmp_path):
@@ -134,9 +163,36 @@ def test_нет_манифеста_не_зелёный(tmp_path):
 
 
 def test_битый_json_ловится(tmp_path):
+    """Невалидный JSON — ошибка с внятным текстом, а не пустое сообщение.
+
+    Мутант, подменивший текст на `None`, оставил бы исключение без диагностики:
+    тип верен, а починить по нему нечего.
+    """
     (tmp_path / coverage.MANIFEST).write_text("{ не json", encoding="utf-8")
-    with pytest.raises(CoverageError):
+    with pytest.raises(CoverageError, match="невалидный JSON"):
         load(tmp_path)
+
+
+def test_лишнее_поле_сообщает_поле(tmp_path):
+    """Сообщение об ошибке обязано называть путь поля и его вид ошибки.
+
+    Мутанты в `_where` (разделитель локации `.`, текст «корень», регистр)
+    выживали: тест проверял только тип исключения. Здесь сверяется сама
+    формулировка — путь до поля склеен точками.
+    """
+    (tmp_path / coverage.MANIFEST).write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "obligations": [
+                    {"bot": "x", "flow": "f", "case": "c.yaml", "kind": "positive", "extra": 1}
+                ],
+            }
+        )
+    )
+    with pytest.raises(CoverageError) as ei:
+        load(tmp_path)
+    assert "obligations.0.extra" in str(ei.value), str(ei.value)
 
 
 def test_неизвестный_вид_ловится(tmp_path):
@@ -144,6 +200,19 @@ def test_неизвестный_вид_ловится(tmp_path):
     _manifest(tmp_path, [_entry("bot-x", "работа", "ok.yaml", "weird")])
     problems = check(tmp_path)
     assert problems and any("kind" in p for p in problems)
+
+
+def test_здоровый_манифест_зелёный(tmp_path):
+    """Бот с настоящим positive-кейсом не должен получать замечаний.
+
+    Мутанты, поменявшие литерал `"positive"` (регистр или «XXpositiveXX»),
+    выживали: все негативные тесты заканчивались отсутствием positive-кейса, и
+    сломанный литерал давал тот же результат. Здесь positive-кейс есть — при
+    корректном коде замечаний ноль, при мутанте появляется ложное.
+    """
+    _write(tmp_path, "happy.yaml", positive=True, cid="happy")
+    _manifest(tmp_path, [_entry("bot-x", "работа", "happy.yaml", "positive")])
+    assert check(tmp_path) == []
 
 
 def test_пустой_манифест_ловится(tmp_path):

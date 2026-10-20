@@ -18,6 +18,7 @@ import pathlib
 import pytest
 import yaml
 
+from botkit_farm.source import _repo_name as repo_name
 from botkit_farm.source import is_url, local_for
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -54,11 +55,12 @@ def _write_case(dir_: pathlib.Path, cid: str, source: str) -> None:
     )
 
 
-def _repo_name(url: str) -> str:
-    """Ожидаемое имя каталога: последний сегмент пути без `.git`.
+def _expected_name(url: str) -> str:
+    """Ожидаемое имя каталога по контракту модуля: последний сегмент без `.git`.
 
-    Дублирует контракт `source._repo_name` намеренно — тест держит именно
-    отображение, документированное в модуле, а не его приватную реализацию.
+    Это оракул для теста отображения: независимое выражение документированного
+    контракта, а не вызов проверяемой функции. Имя намеренно не совпадает с
+    `repo_name` — совпадение теней заставило бы тест проверять сам себя.
     """
     tail = url.rstrip("/").rsplit("/", 1)[-1]
     return tail[:-4] if tail.endswith(".git") else tail
@@ -91,7 +93,7 @@ def test_каждый_url_кейс_резолвится_в_свой_бот(tmp_p
         if isinstance(data, dict) and data.get("source")
     }
     assert parsed, "синтетические кейсы не разобрались — тест ничего не проверяет"
-    for name in {_repo_name(src) for src in parsed.values() if is_url(src)}:
+    for name in {_expected_name(src) for src in parsed.values() if is_url(src)}:
         (tmp_path / name).mkdir()
 
     missing = []
@@ -99,7 +101,7 @@ def test_каждый_url_кейс_резолвится_в_свой_бот(tmp_p
         if not is_url(src):
             continue
         got = local_for(src, tmp_path)
-        want = tmp_path / _repo_name(src)
+        want = tmp_path / _expected_name(src)
         if got != want:
             missing.append(f"{cid}: {src} -> {got}, ожидался {want}")
     assert not missing, "URL кейса не отображается на свой каталог:\n" + "\n".join(missing)
@@ -116,7 +118,7 @@ def test_боевые_кейсы_имеют_url_источник(tmp_path):
     for cid, src in mapping.items():
         if not is_url(src):
             continue
-        (tmp_path / _repo_name(src)).mkdir(exist_ok=True)
+        (tmp_path / _expected_name(src)).mkdir(exist_ok=True)
         assert local_for(src, tmp_path) is not None, f"{cid}: {src} не резолвится"
 
 
@@ -155,3 +157,104 @@ def test_чекаут_указывает_на_реальный_каталог(tm
 def test_идентификатор_кейса_не_сломан(cid: str):
     """Страховка от опечатки в YAML, которая сорвала бы разбор всего файла."""
     assert cid and isinstance(cid, str)
+
+
+# ── is_url: каждая принятая схема под проверкой ────────────────────────────
+#
+# Мутант, вычеркнувший одну схему из кортежа (ssh://, git://, http://),
+# выживал: ни один тест не подавал URL с ней. Схема без теста — это и есть
+# незакрытая ветка, поэтому перебираем все.
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "http://github.com/a/b",
+        "https://github.com/a/b",
+        "git@github.com:a/b.git",
+        "ssh://git@github.com/a/b",
+        "git://github.com/a/b",
+    ],
+)
+def test_каждая_принятая_схема_это_url(url: str):
+    """Все схемы из кортежа is_url распознаются — выпадение любой роняет тест."""
+    assert is_url(url) is True
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        "./bots/botkit-store",
+        "/abs/path/bot",
+        "bots/botkit-store",
+        "HTTP://github.com/a/b",  # регистр значим: схемы строчные
+        "SSH://git@github.com/a/b",
+        "htp://typo",
+    ],
+)
+def test_не_url_не_распознаётся(source: str):
+    """Ложное срабатывание отправило бы локальный путь в клон — это баг."""
+    assert is_url(source) is False
+
+
+# ── _repo_name: ветки без покрытия держатся точечно ────────────────────────
+#
+# Мутанты в rstrip/rsplit/срезе .git/срезе двоеточия/замене символов/гварде
+# «.» и обрезке до 64 выживали: существующие тесты брали лишь одну форму URL.
+# Здесь каждая ветка зафиксирована отдельным случаем.
+
+
+def test_repo_name_снимает_git_и_хвостовой_слеш():
+    """`.git` срезается, хвостовой `/` не попадает в имя каталога."""
+    assert repo_name("https://github.com/ninelegsdog/botkit-store.git") == "botkit-store"
+    assert repo_name("https://github.com/ninelegsdog/botkit-store/") == "botkit-store"
+
+
+def test_repo_name_берёт_последний_сегмент_а_не_предыдущий():
+    """rsplit(delim, 1) — именно 1: больший n вернул бы кусок пути."""
+    assert repo_name("https://github.com/ninelegsdog/botkit-store") == "botkit-store"
+
+
+def test_repo_name_терпит_гонки_и_схему_scp():
+    """`git@host:user/repo` — двоеточие отделяет имя репозитория от хоста."""
+    assert repo_name("git@github.com:ninelegsdog/botkit-store.git") == "botkit-store"
+
+
+def test_repo_name_заменяет_опасные_символы():
+    """Слеш и `..` не должны пережить преобразование — иначе уход из песочницы."""
+    got = repo_name("https://github.com/evil/../../etc/passwd.git")
+    assert "/" not in got and ".." not in got
+
+
+def test_repo_name_пустой_и_точечный_получают_префикс():
+    """Пустое/начинающееся с точки имя получило бы `repo` — иначе небезопасно."""
+    assert repo_name("https://github.com/a/.hidden").startswith("repo")
+    assert repo_name("https://github.com/a/.").startswith("repo")
+
+
+def test_repo_name_обрезается_до_64():
+    """Слишком длинное имя обрезается ровно до 64 символов."""
+    long_name = "x" * 200
+    assert len(repo_name(f"https://github.com/a/{long_name}")) == 64
+
+
+def test_repo_name_заменяет_каждый_опасный_символ_на_один_подчёрк():
+    """Небезопасный символ (`@`, пробел) обязан стать РОВНО одним `_`.
+
+    Мутанты, заменившие `_` на «XX_XX» или на пустоту, выживали: в тестах не
+    было URL, где подстановка вообще происходит. Символ `@` и пробел из имени
+    каталога уходят — иначе имя разъедется с `bots/<name>`.
+    """
+    assert repo_name("https://github.com/a/b@c") == "b_c"
+    assert repo_name("https://github.com/a/we ird") == "we_ird"
+
+
+def test_repo_name_двоеточие_в_имени_обрезается_до_последнего_сегмента():
+    """Двоеточие разделяет хост и путь (`git@host:user/repo`) — берётся хвост.
+
+    Мутант, убравший разбиение по `:`, оставлял бы `host:user/repo`, и имя
+    каталога не совпало бы с ботом. Проверяем обе формы: scp-форму и двоеточие,
+    оказавшееся в последнем сегменте пути.
+    """
+    assert repo_name("git@github.com:user/repo-name") == "repo-name"
+    assert repo_name("https://github.com/a/b:c") == "c"

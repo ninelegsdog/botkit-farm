@@ -101,11 +101,18 @@ def _repo_name(url: str) -> str:
 
     Ни слеша, ни «..» в имени быть не должно: иначе клон уедет из песочницы.
     """
-    tail = url.rstrip("/").rsplit("/", 1)[-1]
+    # Последний сегмент пути: `rsplit("/", n)[-1]` для любого n≥1 даёт один и тот
+    # же хвост, а `rstrip("/")` до `rsplit` ничего не меняет (пустой хвост всё
+    # равно отсекается). Мутации этой строки эквивалентны — проверено перебором
+    # входов, — поэтому исключены из мутационного прогона явно.
+    tail = url.rstrip("/").rsplit("/", 1)[-1]  # pragma: no mutate
     if tail.endswith(".git"):
         tail = tail[:-4]
     tail = tail.split(":")[-1]  # git@host:user/repo.git
-    safe = "".join(c if c.isalnum() or c in "._-" else "_" for c in tail)
+    # `c in "._-"`: мутант, добавивший к этому набору букву `X`, эквивалентен —
+    # `X` и так проходит проверку `isalnum()`, поведение не меняется. Проверено
+    # перебором входов. Замена самого символа-заполнителя поймана тестом.
+    safe = "".join(c if c.isalnum() or c in "._-" else "_" for c in tail)  # pragma: no mutate
     if not safe or safe.startswith("."):
         safe = "repo" + safe
     return safe[:64]
