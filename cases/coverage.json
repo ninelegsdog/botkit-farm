@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "obligations": [
+    {"bot": "botkit-bookingbot", "flow": "запись клиента", "case": "booking-repeat-from-confirm.yaml", "kind": "positive"},
+    {"bot": "botkit-bookingbot", "flow": "вход админа", "case": "bookingbot-admin-flow.yaml", "kind": "positive"},
+
+    {"bot": "botkit-delivery", "flow": "поиск заказа и статус", "case": "delivery-status-change-notifies.yaml", "kind": "positive"},
+    {"bot": "botkit-delivery", "flow": "админ-гейт / IDOR", "case": "delivery-idor-guard.yaml", "kind": "gate"},
+
+    {"bot": "botkit-docuflow", "flow": "генерация документа", "case": "docuflow-repeat-keeps-version.yaml", "kind": "positive"},
+    {"bot": "botkit-docuflow", "flow": "админ-гейт", "case": "docuflow-admin-guard.yaml", "kind": "gate"},
+
+    {"bot": "botkit-leadgen", "flow": "приём заявки", "case": "leadgen-second-lead-keeps-first.yaml", "kind": "positive"},
+    {"bot": "botkit-leadgen", "flow": "админ-гейт / очередь", "case": "leadgen-queue-guard.yaml", "kind": "gate"},
+
+    {"bot": "botkit-membership", "flow": "жизненный цикл подписки", "case": "membership-expired-closes-access.yaml", "kind": "positive"},
+    {"bot": "botkit-membership", "flow": "вход админа", "case": "membership-admin-flow.yaml", "kind": "positive"},
+
+    {"bot": "botkit-pricesentry", "flow": "уведомление об изменении цены", "case": "pricesentry-alert-on-change.yaml", "kind": "positive"},
+    {"bot": "botkit-pricesentry", "flow": "админ-гейт", "case": "pricesentry-admin-guard.yaml", "kind": "gate"},
+
+    {"bot": "botkit-reminder", "flow": "рассылка по сегменту", "case": "reminder-broadcast-segment.yaml", "kind": "positive"},
+    {"bot": "botkit-reminder", "flow": "админ-гейт", "case": "reminder-admin-guard.yaml", "kind": "gate"},
+
+    {"bot": "botkit-store", "flow": "оформление заказа", "case": "store-checkout-creates-order.yaml", "kind": "positive"},
+    {"bot": "botkit-store", "flow": "админ-гейт", "case": "store-admin-guard.yaml", "kind": "gate"},
+
+    {"bot": "botkit-support", "flow": "жизненный цикл тикета", "case": "support-ticket-lifecycle.yaml", "kind": "positive"},
+    {"bot": "botkit-support", "flow": "админ-гейт", "case": "support-admin-guard.yaml", "kind": "gate"}
+  ]
+}

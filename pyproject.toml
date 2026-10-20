@@ -162,6 +162,10 @@ only_mutate = [
   "src/botkit_farm/case/model.py",
   "src/botkit_farm/runner/engine.py",
   "src/botkit_farm/security.py",
+  # Гейты покрытия и источника: мутант в них, выживший при зелёных тестах,
+  # означал бы гейт, который пропускает сломанное правило.
+  "src/botkit_farm/coverage.py",
+  "src/botkit_farm/source.py",
 ]
 mutate_only_covered_lines = true
 # Отбор тестов: без рендера. Playwright на каждый мутант — минуты впустую, а
@@ -178,6 +182,8 @@ pytest_add_cli_args_test_selection = [
   "tests/test_report.py",
   "tests/test_inspect.py",
   "tests/test_run.py",
+  "tests/test_coverage.py",
+  "tests/test_local_source.py",
 ]
 
 [tool.bandit]

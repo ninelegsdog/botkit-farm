@@ -46,7 +46,9 @@ def test_каждый_url_кейс_находит_локальный_чекау�
         if not is_url(src):
             continue
         if local_for(src, BOTS) is None:
-            missing.append(f"{cid}: {src} -> нет каталога bots/{src.rstrip('/').rsplit('/', 1)[-1]}")
+            missing.append(
+                f"{cid}: {src} -> нет каталога bots/{src.rstrip('/').rsplit('/', 1)[-1]}"
+            )
     assert not missing, "у кейсов нет локального чекаута:\n" + "\n".join(missing)
 
 

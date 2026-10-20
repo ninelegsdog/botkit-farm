@@ -251,6 +251,53 @@ def _list_cases() -> int:
     return 1 if errors else 0
 
 
+# ── coverage ────────────────────────────────────────────────────────────────
+
+
+def _coverage(target: str, check: bool) -> int:
+    """Показать и проверить обязательства покрытия (кейс на поток каждого бота).
+
+    Отличие от `catalog`: там «регресс X существует», здесь «у каждого бота
+    есть кейс на ключевой поток, а не только на админ-гейт». `--check` — шаг
+    CI: бот, покрытый одним отказом, не доказывает, что умеет работать.
+    """
+    from botkit_farm import coverage as coverage_mod
+
+    root = pathlib.Path(target).expanduser()
+    if not root.exists():
+        print(f"каталог кейсов не найден: {root}")
+        return 2
+
+    problems = coverage_mod.check(root)
+    try:
+        ob = coverage_mod.load(root)
+    except coverage_mod.CoverageError:
+        ob = None
+
+    if check:
+        for p in problems:
+            print(f"  ✗ {p}")
+        if problems:
+            print(f"покрытие не выполнено: {len(problems)} проблем(ы)")
+            return 1
+        if ob is not None:
+            bots = {o.bot for o in ob.obligations}
+            print(f"покрытие выполнено: {len(ob.obligations)} обязательств на {len(bots)} ботов")
+        return 0
+
+    if ob is None:
+        for p in problems:
+            print(f"  ✗ {p}")
+        return 1
+    print(f"Обязательств покрытия: {len(ob.obligations)} ({root})")
+    for o in ob.obligations:
+        mark = "＋" if o.kind == "positive" else "⛔"
+        print(f"  {mark} {o.bot:22} {o.flow:28} {o.case}")
+    for p in problems:
+        print(f"  ⚠️  {p}")
+    return 1 if problems else 0
+
+
 # ── run ─────────────────────────────────────────────────────────────────────
 
 
@@ -303,7 +350,10 @@ async def _shoot(case: Any, result: CaseResult) -> None:
 
 
 async def _run_one(
-    case_path: pathlib.Path, ref: str | None, source: str | None = None
+    case_path: pathlib.Path,
+    ref: str | None,
+    source: str | None = None,
+    local: bool = False,
 ) -> CaseResult | None:
     from botkit_farm.case.loader import CaseError
 
@@ -319,7 +369,22 @@ async def _run_one(
         # source с командной строки выше case.source: CI уже выкачал репозиторий
         # и клонировал бы дефолтную ветку — то есть проверял не то, что меняется
         # в PR. Зелёный прогон обязан доказывать код из чекаута, а не main.
-        src = await asyncio.to_thread(prepare, source or case.source, BOTS_DIR, ref=ref)
+        chosen = source or case.source
+        # --local: URL превращаем в локальный чекаут того же бота. Иначе кейс с
+        # `source: https://...` клонирует GitHub main и не видит правку в рабочем
+        # дереве — разработчик проверяет чужой код. Отсутствие чекаута — ошибка,
+        # а не тихий откат на клон: молчание здесь и есть та ловушка, которую
+        # флаг закрывает.
+        if local and source is None:
+            from botkit_farm.source import is_url, local_for
+
+            if is_url(case.source):
+                found = local_for(case.source, BOTS_DIR)
+                if found is None:
+                    print(f"  ✗ --local: нет локального чекаута для {case.source} в {BOTS_DIR}")
+                    return None
+                chosen = str(found)
+        src = await asyncio.to_thread(prepare, chosen, BOTS_DIR, ref=ref)
         print(f"  код: {src.path}{' (клон)' if src.was_cloned else ' (локальная копия)'}")
         result = await asyncio.to_thread(
             run_case,
@@ -389,7 +454,7 @@ async def _run(args: argparse.Namespace) -> int:
     started = time.monotonic()
     results: list[CaseResult] = []
     for path in paths:
-        r = await _run_one(path, args.ref, args.source)
+        r = await _run_one(path, args.ref, args.source, args.local)
         if r is not None:
             results.append(r)
 
@@ -452,6 +517,12 @@ def main(argv: list[str] | None = None) -> int:
         "не того кода",
     )
     p_run.add_argument(
+        "--local",
+        action="store_true",
+        help="URL в case.source заменить на локальный чекаут bots/<bot> — прогон "
+        "незакоммиченных правок. Без чекаута кейс падает, а не уходит в клон",
+    )
+    p_run.add_argument(
         "--junit",
         metavar="ПУТЬ",
         help="куда записать отчёт JUnit XML (для CI: кейсы видны как тесты)",
@@ -478,6 +549,17 @@ def main(argv: list[str] | None = None) -> int:
     )
     p_catalog.set_defaults(fn=None)
 
+    p_coverage = sub.add_parser("coverage", help="показать и проверить обязательства покрытия")
+    p_coverage.add_argument(
+        "target", nargs="?", default=str(CASES_DIR), help="каталог кейсов с coverage.json"
+    )
+    p_coverage.add_argument(
+        "--check",
+        action="store_true",
+        help="ничего не печатать лишнего, упасть при непокрытом потоке (для CI)",
+    )
+    p_coverage.set_defaults(fn=None)
+
     args = ap.parse_args(argv)
     try:
         if args.cmd == "doctor":
@@ -492,6 +574,8 @@ def main(argv: list[str] | None = None) -> int:
             return _migrate(args.target, args.check)
         if args.cmd == "catalog":
             return _catalog(args.target, args.check)
+        if args.cmd == "coverage":
+            return _coverage(args.target, args.check)
         return asyncio.run(_run(args))
     except KeyboardInterrupt:
         print("\nпрервано")

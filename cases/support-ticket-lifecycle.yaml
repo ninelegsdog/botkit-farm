@@ -1,0 +1,66 @@
+schema_version: 1
+id: support-ticket-lifecycle
+title: support — клиент создаёт тикет и видит его в «Мои тикеты»
+source: https://github.com/ninelegsdog/botkit-support
+builder: newgen
+fixture: support
+seed: true
+tags:
+- regression
+steps:
+# Счастливый путь, которого у support не было: единственный кейс проверял
+# отказ гостю (gate). Здесь клиент проходит весь поток: помощь → новая
+# заявка → категория → описание → подтверждение → карточка в списке.
+- send: /start
+  as: client
+  expect:
+    text_contains:
+    - Здравствуйте! Чем можем помочь
+- send: ❓ Помощь
+  as: client
+  expect:
+    text_contains:
+    - Чтобы мы помогли
+    - ➕ Новый тикет
+    - 📋 Мои тикеты
+- send: ➕ Новый тикет
+  as: client
+  expect:
+    text_contains:
+    - Выберите категорию
+    buttons_contains:
+    - 💳 Оплата
+    - 💬 Другое
+# Категория выбирается сырым callback_data: у клиента это inline-кнопка, а
+# `click` жмёт по подписи. Здесь подпись стабильна, поэтому клик по «Оплата».
+- click: 💳 Оплата
+  as: client
+  expect:
+    text_contains:
+    - Опишите проблему
+- send: "Не приходит чек после оплаты"
+  as: client
+  expect:
+    text_contains:
+    - Создать тикет?
+    - "Не приходит чек после оплаты"
+    buttons_contains:
+    - ✅ Создать
+    - ❌ Отмена
+- click: ✅ Создать
+  as: client
+  expect:
+    text_contains:
+    - создан
+    - Менеджер ответит
+- send: 📋 Мои тикеты
+  as: client
+  expect:
+    text_contains:
+    - "🎫 Тикет #"
+    - "Категория: payment"
+    - "Тема: Не приходит чек после оплаты"
+actors:
+  client:
+    user_id: 777000777
+    name: Клиент

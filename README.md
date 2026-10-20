@@ -63,7 +63,17 @@ python3 -m venv .venv
 
 # every case at once
 .venv/bin/botkit-farm run --tag smoke
+
+# проверять свои правки, а не GitHub: URL кейса → локальный bots/<bot>
+.venv/bin/botkit-farm run --local cases/store-checkout-creates-order.yaml
 ```
+
+> **`--local` — что он закрывает.** Кейс указывает `source: https://...`, и
+> ферма клонирует этот репозиторий (`--depth 1`) в песочницу. Значит обычный
+> `run` проверяет **GitHub main**, а не то, что лежит у вас в рабочем дереве:
+> правка бота остаётся непроверенной, а прогон зелёный. `--local` заменяет URL
+> на существующий чекаут `bots/<bot>`; если чекаута нет, кейс **падает** — тихий
+> откат на клон вернул бы ту же иллюзию.
 
 ## A test case
 
