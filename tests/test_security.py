@@ -171,6 +171,43 @@ def test_имя_из_ssh_формы():
     assert _repo_name("git@github.com:ninelegsdog/botkit-store.git") == "botkit-store"
 
 
+# ── --local: URL → локальный чекаут ─────────────────────────────────────────
+
+
+def test_local_for_находит_чекаут_по_url(tmp_path):
+    """URL того же бота указывает на существующий каталог bots/<bot>."""
+    from botkit_farm.source import local_for
+
+    (tmp_path / "botkit-store").mkdir()
+    got = local_for("https://github.com/ninelegsdog/botkit-store", tmp_path)
+    assert got == tmp_path / "botkit-store"
+
+
+def test_local_for_молчит_если_чекаута_нет(tmp_path):
+    """Нет каталога — None, а не выдуманный путь. Иначе --local вернул бы клон."""
+    from botkit_farm.source import local_for
+
+    assert local_for("https://github.com/ninelegsdog/botkit-ghost", tmp_path) is None
+
+
+def test_local_for_игнорирует_локальный_путь(tmp_path):
+    """Локальный source — уже не URL; --local не должен его трогать."""
+    from botkit_farm.source import local_for
+
+    assert local_for("./bots/botkit-store", tmp_path) is None
+
+
+def test_local_for_имя_совпадает_с_repo_name(tmp_path):
+    """Связка URL↔каталог — то же правило, что у клона: иначе --local промахнётся."""
+    from botkit_farm.source import _repo_name, local_for
+
+    (tmp_path / "botkit-store").mkdir()
+    (tmp_path / "botkit-store.git").mkdir()  # не должен победить
+    got = local_for("git@github.com:ninelegsdog/botkit-store.git", tmp_path)
+    assert got == tmp_path / "botkit-store"
+    assert got.name == _repo_name("git@github.com:ninelegsdog/botkit-store.git")
+
+
 # ── точные проверки, которые ловят подмену полей/строк ───────────────────────
 #
 # Мутационный прогон (роадмап B4) подменяет отдельные строки, поля и границы.

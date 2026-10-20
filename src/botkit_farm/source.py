@@ -31,6 +31,25 @@ def is_url(source: str) -> bool:
     return source.startswith(("http://", "https://", "git@", "ssh://", "git://"))
 
 
+def local_for(url: str, bots_dir: pathlib.Path) -> pathlib.Path | None:
+    """Найти локальный чекаут для git-URL, если он есть.
+
+    Нужно для прогона **незакоммиченных правок** (`botkit-farm run --local`):
+    кейс указывает `source: https://...`, ферма честно клонирует — и разработчик,
+    поправивший бота локально, проверяет чужой код. Здесь URL превращается в
+    локальный путь, но только если каталог действительно существует: молчаливый
+    откат на клон при опечатке в имени бота вернул бы ту же иллюзию.
+
+    Возвращает `None`, если локального чекаута нет, — вызывающий решает, падать
+    или откатиться. Соответствие URL→имя то же, что у `_repo_name`, чтобы
+    `https://github.com/ninelegsdog/botkit-store` нашёл `bots/botkit-store`.
+    """
+    if not is_url(url):
+        return None
+    candidate = bots_dir / _repo_name(url)
+    return candidate if candidate.is_dir() else None
+
+
 def prepare(source: str, sandbox: pathlib.Path, *, ref: str | None = None) -> Source:
     """Подготовить код бота: скопировать или склонировать в песочницу.
 
@@ -116,4 +135,4 @@ def _git(*args: str) -> None:
         )
 
 
-__all__ = ["Source", "is_url", "prepare"]
+__all__ = ["Source", "is_url", "local_for", "prepare"]
