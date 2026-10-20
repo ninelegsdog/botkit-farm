@@ -24,6 +24,16 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 CASES = ROOT / "cases"
 BOTS = ROOT / "bots"
 
+# mutmut копирует в `mutants/` только исходники (`source_paths`) и тесты — данных
+# кейсов там нет. Тесты, которым нужны **боевые** `cases/`, пропускаются в таком
+# дереве; гейт отображения URL → `bots/<repo-name>` работает на синтетических
+# кейсах и проверяет логику `source.py` независимо от наличия данных.
+_ЕСТЬ_КЕЙСЫ = CASES.is_dir() and any(CASES.rglob("*.y*ml"))
+с_боевыми_кейсами = pytest.mark.skipif(
+    not _ЕСТЬ_КЕЙСЫ,
+    reason="нет cases/*.yaml (мутационное дерево mutmut или отсутствие данных)",
+)
+
 
 def _case_sources() -> dict[str, str]:
     """id кейса → строка source, по всем кейсам каталога."""
@@ -35,34 +45,79 @@ def _case_sources() -> dict[str, str]:
     return out
 
 
+def _write_case(dir_: pathlib.Path, cid: str, source: str) -> None:
+    """Кейс с заданным source — минимальный, но разбираемый yaml."""
+    (dir_ / f"{cid}.yaml").write_text(
+        f"id: {cid}\ntitle: {cid}\nsource: {source}\nsteps:\n"
+        "  - send: /start\n    expect:\n      text_contains: ['Ок']\n",
+        encoding="utf-8",
+    )
+
+
+def _repo_name(url: str) -> str:
+    """Ожидаемое имя каталога: последний сегмент пути без `.git`.
+
+    Дублирует контракт `source._repo_name` намеренно — тест держит именно
+    отображение, документированное в модуле, а не его приватную реализацию.
+    """
+    tail = url.rstrip("/").rsplit("/", 1)[-1]
+    return tail[:-4] if tail.endswith(".git") else tail
+
+
 def test_каждый_url_кейс_резолвится_в_свой_бот(tmp_path):
-    """--local обязан срабатывать для всех кейсов — проверяем отображение, а не диска.
+    """--local обязан срабатывать для всех URL-кейсов — отображение, а не диск.
 
     Различие принципиально: этот гейт держит «URL кейса соответствует каталогу
-    bots/<bot>», а не «на этой машине лежат клоны девяти ботов». У фермы в
-    собственном CI каталог `bots/` пуст — боты живут отдельными репозиториями и
-    клонируются под прогон, — поэтому проверка наличия клонов была бы красной
-    там, где всё правильно, и молча зелёной только у того, кто уже всё склонировал.
-
-    Здесь `bots_dir` подменяется временным, где создан каталог под каждый бот из
-    кейсов: так проверяется именно отображение URL → `bots/<repo-name>`. Промах
-    (опечатка в `source`, чужой хост, слипшийся путь) роняет тест, и это тот
-    промах, ради которого --local и появился.
+    bots/<repo-name>», а не «на этой машине лежат клоны девяти ботов». У фермы в
+    собственном CI каталог `bots/` пуст, а в дереве mutmut нет и `cases/` —
+    поэтому тест идёт на синтетических кейсах и не зависит ни от того, ни от
+    другого. Промах (опечатка в `source`, слипшийся путь, чужой хост) роняет
+    тест, и это тот промах, ради которого --local и появился.
     """
-    names = {src.rstrip("/").rsplit("/", 1)[-1] for src in _case_sources().values() if is_url(src)}
-    assert names, "в cases/ нет URL-кейсов — тест ничего не проверяет"
-    for name in names:
+    sources = {
+        "store": "https://github.com/ninelegsdog/botkit-store",
+        "booking": "https://github.com/ninelegsdog/botkit-bookingbot.git",
+        "trailing": "https://github.com/ninelegsdog/botkit-support/",
+    }
+    cases = tmp_path / "cases"
+    cases.mkdir()
+    for cid, src in sources.items():
+        _write_case(cases, cid, src)
+
+    parsed = {
+        data["id"]: str(data["source"])
+        for f in sorted(cases.rglob("*.y*ml"))
+        for data in [yaml.safe_load(f.read_text(encoding="utf-8"))]
+        if isinstance(data, dict) and data.get("source")
+    }
+    assert parsed, "синтетические кейсы не разобрались — тест ничего не проверяет"
+    for name in {_repo_name(src) for src in parsed.values() if is_url(src)}:
         (tmp_path / name).mkdir()
 
     missing = []
-    for cid, src in _case_sources().items():
+    for cid, src in parsed.items():
         if not is_url(src):
             continue
         got = local_for(src, tmp_path)
-        want = tmp_path / src.rstrip("/").rsplit("/", 1)[-1]
+        want = tmp_path / _repo_name(src)
         if got != want:
             missing.append(f"{cid}: {src} -> {got}, ожидался {want}")
     assert not missing, "URL кейса не отображается на свой каталог:\n" + "\n".join(missing)
+
+
+@с_боевыми_кейсами
+def test_боевые_кейсы_имеют_url_источник(tmp_path):
+    """Реальные кейсы обязаны нести URL и отображаться на существующий каталог.
+
+    Проверяет данные (`cases/`), а не логику: в мутационном дереве пропускается.
+    """
+    mapping = _case_sources()
+    assert mapping, "в cases/ нет кейсов с source"
+    for cid, src in mapping.items():
+        if not is_url(src):
+            continue
+        (tmp_path / _repo_name(src)).mkdir(exist_ok=True)
+        assert local_for(src, tmp_path) is not None, f"{cid}: {src} не резолвится"
 
 
 def test_отсутствие_чекаута_это_промах_а_не_клон(tmp_path):
