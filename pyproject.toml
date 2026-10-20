@@ -158,6 +158,12 @@ markers = [
 # `source_paths` — нынешнее имя `paths_to_mutate` (в 3.8 первое, второе
 # deprecated): в ТЗ модуль назван старым ключом.
 source_paths = ["src/botkit_farm"]
+# Данные кейсов обязаны попасть в дерево мутанта. mutmut копирует в `mutants/`
+# только `source_paths`, поэтому без этой строки `cases/` там нет — и тесты,
+# читающие боевые кейсы, в мутационном прогоне либо падают («нет данных»), либо
+# пропускаются, то есть молча не проверяют ничего. `also_copy` делает их
+# работающими в дереве мутанта, а не обойдёнными через skipif.
+also_copy = ["cases/"]
 only_mutate = [
   "src/botkit_farm/case/model.py",
   "src/botkit_farm/runner/engine.py",
