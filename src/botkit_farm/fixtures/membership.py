@@ -93,10 +93,13 @@ async def seed(db: Any) -> None:
             },
         )
     )
-    # Истёкший участник: срок в прошлом и статус expired. get_subscription
-    # фильтрует по status ('active'/'trial'/'grace'), поэтому здесь важно
-    # именно значение status — закрытие доступа проверяется синхронно, без
-    # фонового перевода (его на уровне 1 стенд не поднимает).
+    # Истёкший участник: срок давно прошёл, а строка всё ещё 'active' — так и
+    # выглядит прод до срабатывания фонового перевода, а для даты глубоко в
+    # прошлом фон её не двигает вовсе (переход active→grace берёт только окно
+    # вокруг истечения). Закрытие доступа поэтому обязано проверяться
+    # синхронно по дате: get_subscription фильтрует по end_at, а не только по
+    # status. Кейс membership-expired-closes-access — регрессия именно этого
+    # гарда: убрать фильтр по дате — кейс падает (доступ открыт).
     stmts.append(
         (
             "insert into subscribers (user_id, name, username, is_active) values (:uid,:n,'',1)",
@@ -106,11 +109,11 @@ async def seed(db: Any) -> None:
     stmts.append(
         (
             "insert into subscriptions (user_id, plan_id, start_at, end_at, auto_renew, status) "
-            "values (:uid,1,:s,:e,0,'expired')",
+            "values (:uid,1,:s,:e,0,'active')",
             {
                 "uid": EXPIRED_USER_ID,
-                "s": (today - dt.timedelta(days=33)).isoformat(),
-                "e": (today - dt.timedelta(days=3)).isoformat(),
+                "s": (today - dt.timedelta(days=40)).isoformat(),
+                "e": (today - dt.timedelta(days=10)).isoformat(),
             },
         )
     )
