@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "obligations": [
     {"bot": "botkit-bookingbot", "flow": "запись клиента", "case": "booking-repeat-from-confirm.yaml", "kind": "positive"},
     {"bot": "botkit-bookingbot", "flow": "вход админа", "case": "bookingbot-admin-flow.yaml", "kind": "positive"},
@@ -27,5 +27,21 @@
 
     {"bot": "botkit-support", "flow": "жизненный цикл тикета", "case": "support-ticket-lifecycle.yaml", "kind": "positive"},
     {"bot": "botkit-support", "flow": "админ-гейт", "case": "support-admin-guard.yaml", "kind": "gate"}
+  ],
+  "extras": [
+    {"bot": "botkit-bookingbot", "case": "booking-cancel-releases-slot.yaml", "why": "отмена уже созданной записи: ключевой поток бота — создание записи (booking-repeat-from-confirm), а здесь проверяется освобождение слота, то есть следствие, а не отдельный поток"},
+    {"bot": "botkit-bookingbot", "case": "booking-no-free-slots.yaml", "why": "ветка «нет свободных дат»: отказ по состоянию расписания, а не работа потока; успешная запись уже объявлена обязательством"},
+    {"bot": "botkit-delivery", "case": "delivery-admin-guard.yaml", "why": "админ-отказ на reply-кнопке: тот же класс, что и объявленный delivery-idor-guard, отдельного потока не открывает"},
+    {"bot": "botkit-delivery", "case": "delivery-bad-order-number.yaml", "why": "неверный номер заказа: клиентский отказ внутри поиска; ключевой поток бота — успешный поиск и смена статуса (delivery-status-change-notifies)"},
+    {"bot": "botkit-delivery", "case": "delivery-cancelled-not-success.yaml", "why": "отмена создания заказа админом: проверяет, что отменённый заказ не выдан за созданный, — гигиена админ-пути, а не поток клиента"},
+    {"bot": "botkit-docuflow", "case": "docuflow-bad-amount.yaml", "why": "нечисловая сумма: проверка ввода поля; генерация документа уже объявлена обязательством (docuflow-repeat-keeps-version)"},
+    {"bot": "botkit-leadgen", "case": "leadgen-admin-guard.yaml", "why": "админ-отказ на reply-кнопке: тот же класс, что и объявленный leadgen-queue-guard (очередь заявок), отдельного потока нет"},
+    {"bot": "botkit-leadgen", "case": "leadgen-long-free-text.yaml", "why": "устойчивость к длинному свободному вводу: крайний случай, а не отдельный поток; приём заявки объявлен обязательством"},
+    {"bot": "botkit-leadgen", "case": "leadgen-no-contact.yaml", "why": "невалидный телефон: валидация поля внутри приёма заявки, отдельного потока не добавляет"},
+    {"bot": "botkit-pricesentry", "case": "pricesentry-new-item-empty-history.yaml", "why": "карточка товара без истории цен: состояние данных, а не поток мониторинга; ключевой поток — уведомление об изменении цены (объявлен)"},
+    {"bot": "botkit-pricesentry", "case": "pricesentry-remove-clears-notifications.yaml", "why": "удаление товара вместе с уведомлениями: чистка состояния, а не поток мониторинга цены"},
+    {"bot": "botkit-pricesentry", "case": "pricesentry-remove-stops-alerts.yaml", "why": "исчезновение позиции из списка мониторинга: та же операция удаления с другой стороны, отдельного потока нет"},
+    {"bot": "botkit-reminder", "case": "reminder-unsubscribe-stops.yaml", "why": "отписка видна клиенту: обратная сторона подписки, а не отдельный поток; рассылка по сегменту объявлена обязательством"},
+    {"bot": "botkit-store", "case": "store-empty-cart-checkout.yaml", "why": "пустая корзина: отказ на границе оформления заказа; оформление заказа уже объявлено обязательством (store-checkout-creates-order)"}
   ]
 }
