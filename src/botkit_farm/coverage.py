@@ -44,7 +44,7 @@ from __future__ import annotations
 
 import json
 import pathlib
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, ValidationError
 
@@ -115,7 +115,7 @@ class Fleet(_Strict):
     bots: list[BotName] = Field(min_length=1)
 
 
-def _where(error: ValidationError, raw: dict) -> str:
+def _where(error: ValidationError, raw: dict[str, Any]) -> str:
     first = error.errors()[0]
     reason = _extra_reason_problem(raw, tuple(first["loc"]))
     if reason is not None:
@@ -127,7 +127,7 @@ def _where(error: ValidationError, raw: dict) -> str:
     return f"поле {loc}: {first['msg']}"
 
 
-def _extra_reason_problem(raw: dict, loc: tuple[object, ...]) -> str | None:
+def _extra_reason_problem(raw: dict[str, Any], loc: tuple[object, ...]) -> str | None:
     """Правило R3: у `extra` нет непустой причины — назвать бота и кейс.
 
     Сообщение схемы («поле extras.3.why: String should have at least 1
@@ -143,7 +143,7 @@ def _extra_reason_problem(raw: dict, loc: tuple[object, ...]) -> str | None:
     return None
 
 
-def _read_json(path: pathlib.Path, missing: str) -> dict:
+def _read_json(path: pathlib.Path, missing: str) -> dict[str, Any]:
     """Прочитать JSON-манифест и вернуть словарь.
 
     Ошибки — `CoverageError` с понятным текстом: читатель должен знать, какой
@@ -297,8 +297,8 @@ def check(coverage_dir: pathlib.Path) -> list[str]:
     # непонятно, чему он подчиняется, и правка одного места ломает другое.
     in_obligations = {ob.case for ob in obligations.obligations}
     in_extras = {extra.case for extra in obligations.extras}
-    for case in sorted(in_obligations & in_extras):
-        problems.append(f"кейс объявлен дважды: {case}")
+    for dup_case in sorted(in_obligations & in_extras):
+        problems.append(f"кейс объявлен дважды: {dup_case}")
 
     return problems
 
