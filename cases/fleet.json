@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "bots": [
+    "botkit-bookingbot",
+    "botkit-delivery",
+    "botkit-docuflow",
+    "botkit-leadgen",
+    "botkit-membership",
+    "botkit-pricesentry",
+    "botkit-reminder",
+    "botkit-store",
+    "botkit-support"
+  ]
+}
