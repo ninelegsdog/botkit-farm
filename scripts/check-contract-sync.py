@@ -23,7 +23,7 @@ def load_contract_json(path: Path) -> dict:
         raise SystemExit(f"contract unreadable: {path}: {exc}") from exc
 
 
-def find_canonical(env_forced: bool) -> Path | None:
+def find_canonical() -> Path | None:
     env = os.environ.get("BOTKIT_FARM_QUALITYFORGE_CONTRACT")
     if env is not None:
         p = Path(env)
@@ -58,8 +58,7 @@ def main() -> int:
         print("cannot verify: canonical_sha256 not pinned in contract", file=sys.stderr)
         return EXIT_CANNOT_VERIFY
 
-    env = os.environ.get("BOTKIT_FARM_QUALITYFORGE_CONTRACT")
-    canonical = find_canonical(env is not None)
+    canonical = find_canonical()
     if canonical is None:
         print("cannot verify: canonical qualityforge contract not available", file=sys.stderr)
         return EXIT_CANNOT_VERIFY

@@ -394,10 +394,10 @@ async def _run_one(
             work_dir=WORK_DIR,
         )
         if not getattr(result, "source", ""):
-            try:
+            import contextlib
+
+            with contextlib.suppress(Exception):
                 result.source = getattr(case, "source", "") or ""
-            except Exception:
-                pass
         await _shoot(case, result)
         report = write_report(result, REPORTS_DIR)
         print(f"  → {result.status.value.upper()}  {result.steps_done}/{result.steps_total} шагов")
