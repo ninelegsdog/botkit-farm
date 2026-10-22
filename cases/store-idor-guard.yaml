@@ -1,0 +1,28 @@
+schema_version: 1
+id: store-idor-guard
+title: store — гость шлёт чужой callback_data выдачи, payload не утекает (IDOR)
+source: https://github.com/ninelegsdog/botkit-store
+builder: newgen
+fixture: store
+seed: true
+tags:
+- regression
+- security
+actors:
+  guest:
+    user_id: 555000111
+    name: Гость
+steps:
+# `store_redeliver:<order_id>` обслуживается без фильтра состояния, поэтому
+# гость его доносит до обработчика гарантированно: остановить его может
+# только владение. Гард — user_id в WHERE у get_delivery
+# (src/store/service.py:220-242): чужой заказ не достаётся, и бот отвечает
+# только тостом «Товар ещё не выдан.» (src/store/handlers.py:180-186),
+# не различая «нет такого» и «чужой» — чтобы callback не стал оракулом
+# существующих id. Фикстура сеет заказ и выдачу для 424242 (id заказа 1),
+# гость шлёт сырой `store_redeliver:1`: у гостя такой кнопки нет и быть
+# не может, payload ключа доступа при этом в базе уже есть.
+- callback: "store_redeliver:1"
+  as: guest
+  expect:
+    text_equals: Товар ещё не выдан.
