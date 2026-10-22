@@ -66,10 +66,29 @@ steps:
       silent: true
 """
 
+# Отказ тостом, а не молчанием: гард require_admin отвечает «⛔ Доступ
+# запрещён.», и кейс ловит именно это. Форма refusal, которую старое
+# определение gate («только silent») не признавало.
+CALLBACK_GATE_CASE = """
+id: {id}
+title: {title}
+source: https://example.invalid/bot
+tags: [security]
+steps:
+  - callback: admin:services
+    as: guest
+    expect:
+      text_contains: ["⛔ Доступ запрещён."]
+"""
+
 
 def _write(dir_: pathlib.Path, name: str, positive: bool, cid: str) -> None:
     tpl = POSITIVE_CASE if positive else GATE_CASE
     (dir_ / name).write_text(tpl.format(id=cid, title=cid), encoding="utf-8")
+
+
+def _write_callback_gate(dir_: pathlib.Path, name: str, cid: str) -> None:
+    (dir_ / name).write_text(CALLBACK_GATE_CASE.format(id=cid, title=cid), encoding="utf-8")
 
 
 def _manifest_v2(
@@ -146,6 +165,41 @@ def test_gate_привязан_к_positive_кейсу_ловится(tmp_path):
     _fleet(tmp_path, ["bot-x"])
     problems = check(tmp_path)
     assert any("обещает gate" in p and "не является" in p for p in problems), problems
+
+
+def test_gate_по_сырому_callback_признаётся_отказом(tmp_path):
+    """Отказ тостом — тоже gate: кейс с сырым callback проходит гейт.
+
+    Определение «только silent» отвергало IDOR-кейсы трёх ботов: гард
+    `require_admin` отвечает тостом, а не молчит, и гейт требовал объявить
+    такой кейс `positive` — утверждать «поток работает» о проверке отказа.
+    Регрессия — три обязательства `*-idor-guard` в боевом манифесте
+    (`test_боевое_покрытие_выполнено` краснеет, если вернуть старое правило).
+    """
+    _write(tmp_path, "ok.yaml", positive=True, cid="happy")
+    _write_callback_gate(tmp_path, "idor.yaml", cid="forged")
+    _manifest(
+        tmp_path,
+        [
+            _entry("bot-x", "работа", "ok.yaml", "positive"),
+            _entry("bot-x", "админ-гейт / IDOR", "idor.yaml", "gate"),
+        ],
+    )
+    _fleet(tmp_path, ["bot-x"])
+    assert check(tmp_path) == []
+
+
+def test_positive_привязан_к_callback_кейсу_ловится(tmp_path):
+    """Кейс-отказ по сырому callback под видом positive: падение.
+
+    Иначе IDOR-кейс можно было бы объявить positive и пройти гейт утверждением,
+    которое сам же кейс и опровергает: он проходит и без гарда.
+    """
+    _write_callback_gate(tmp_path, "idor.yaml", cid="forged")
+    _manifest(tmp_path, [_entry("bot-x", "админ-гейт / IDOR", "idor.yaml", "positive")])
+    _fleet(tmp_path, ["bot-x"])
+    problems = check(tmp_path)
+    assert any("обещает positive" in p and "gate" in p for p in problems), problems
 
 
 def test_пропавший_кейс_ловится(tmp_path):
