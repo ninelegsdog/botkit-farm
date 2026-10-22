@@ -1,0 +1,27 @@
+schema_version: 1
+id: membership-idor-guard
+title: membership — гость шлёт админский callback_data, гард отказывает (IDOR)
+source: https://github.com/ninelegsdog/botkit-membership
+builder: legacy
+fixture: membership
+seed: true
+tags:
+- regression
+- security
+actors:
+  guest:
+    user_id: 555000111
+    name: Гость
+steps:
+# `adm:plans` обслуживается без фильтра состояния, поэтому гость его
+# доносит до обработчика гарантированно: остановить его может только
+# @require_admin (src/admin/handlers.py:64-65). Декоратор для чужака отвечает
+# тостом «⛔ Доступ запрещён.» (src/core/auth.py:42-43) и не выполняет
+# handler: список тарифов не утекает. В отличие от delivery гард здесь не
+# молчит, а отказывает — поэтому ожидание текст отказа, а не silent.
+# Шаг шлёт сырые callback_data: у гостя такой кнопки нет и быть не может.
+- callback: adm:plans
+  as: guest
+  expect:
+    text_contains:
+    - "⛔ Доступ запрещён."
