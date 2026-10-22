@@ -32,9 +32,10 @@ def render_markdown(result: CaseResult) -> str:
     lines.append(f"- кейс: `{result.case_id}`")
     lines.append(f"- шагов: {result.steps_done}/{result.steps_total}")
     lines.append(f"- длительность: {result.duration_s:.1f} с")
-    if result.repo:
+    repo_display = result.source if getattr(result, "source", "") else result.repo
+    if repo_display:
         lines.append(
-            f"- репозиторий: `{result.repo}`" + (f" @ {result.commit}" if result.commit else "")
+            f"- репозиторий: `{repo_display}`" + (f" @ {result.commit}" if result.commit else "")
         )
     if result.builder and result.builder != "?":
         lines.append(f"- сборка: {result.builder}")

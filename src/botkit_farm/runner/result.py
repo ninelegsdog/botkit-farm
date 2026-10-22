@@ -77,6 +77,7 @@ class CaseResult:
     repo: str = ""
     commit: str = ""
     builder: str = ""
+    source: str = ""
     # Чем карантин остановил бота. Не влияет на статус: бот, получивший отказ,
     # мог отработать и пройти кейс, а сам факт попытки — находка для владельца
     # и повод спросить, зачем боту туда надо.
@@ -132,6 +133,7 @@ class CaseResult:
             "repo": self.repo,
             "commit": self.commit,
             "builder": self.builder,
+            "source": self.source,
             "quarantine": self.quarantine,
         }
 
