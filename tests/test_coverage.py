@@ -248,7 +248,9 @@ def test_здоровый_манифест_зелёный(tmp_path):
 
 
 def test_пустой_манифест_ловится(tmp_path):
-    (tmp_path / coverage.MANIFEST).write_text('{"schema_version": 2, "obligations": [], "extras": []}')
+    (tmp_path / coverage.MANIFEST).write_text(
+        '{"schema_version": 2, "obligations": [], "extras": []}'
+    )
     with pytest.raises(CoverageError):
         load(tmp_path)
 
@@ -287,7 +289,9 @@ def test_кейс_вне_манифеста_ловится(tmp_path):
     _write(tmp_path, "happy.yaml", positive=True, cid="happy")
     _fleet(tmp_path, ["bot-x"])
     problems = check(tmp_path)
-    assert any("кейс не объявлен в манифесте" in p and "orphan.yaml" in p for p in problems), problems
+    assert any("кейс не объявлен в манифесте" in p and "orphan.yaml" in p for p in problems), (
+        problems
+    )
 
 
 def test_экстра_без_причины_ловится(tmp_path):
@@ -331,7 +335,9 @@ def test_бот_из_флота_без_обязательств_ловится(t
 def test_версия_1_понятная_ошибка(tmp_path):
     """Манифест версии 1 — понятная ошибка с инструкцией обновиться до 2."""
     (tmp_path / coverage.MANIFEST).write_text(
-        json.dumps({"schema_version": 1, "obligations": [_entry("bot-x", "ф", "c.yaml", "positive")]})
+        json.dumps(
+            {"schema_version": 1, "obligations": [_entry("bot-x", "ф", "c.yaml", "positive")]}
+        )
     )
     with pytest.raises(CoverageError) as ei:
         load(tmp_path)
