@@ -156,9 +156,9 @@ def test_каталог_репозитория_цел():
     удалит кейс и не тронет манифест (или наоборот), тест назовёт разрыв, а
     порог в 10 не даст каталогу незаметно усохнуть.
     """
-    examples = ROOT / "examples"
-    assert check(examples) == []
-    assert len(load(examples).regressions) >= 10
+    cases = ROOT / "cases"
+    assert check(cases) == []
+    assert len(load(cases).regressions) >= 10
 
 
 def _repo_of(source: str) -> str:
@@ -183,7 +183,7 @@ def test_пример_обязан_быть_отбираем_на_прогоне
 
     stray = {
         p.name: load_file(p).source
-        for p in sorted((ROOT / "examples").glob("*.yaml"))
+        for p in sorted((ROOT / "cases").glob("*.yaml"))
         if _repo_of(load_file(p).source) not in known
     }
     assert stray == {}, f"примеры вне инвентаря ботов: {stray}"

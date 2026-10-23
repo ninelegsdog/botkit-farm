@@ -111,25 +111,17 @@ jobs:
           if [ -n "$selection" ]; then
             mapfile -t cases <<< "$selection"
           fi
-          # Примеры префикса не имеют (booking-happy-path у бота bookingbot),
-          # поэтому относятся к боту по своему полю source. Отбираем по
-          # последнему сегменту пути — так совпадают и URL, и локальный путь.
-          # Тот же инвариант держит тест
-          # tests/test_catalog.py::test_пример_обязан_быть_отбираем_на_прогоне_бота:
-          # пример с source вне инвентаря ботов роняет CI фермы, а не молчит.
-          examples=()
-          for f in examples/*.yaml; do
-            if grep -qE "/botkit-${BOT}[[:space:]]*\$" "$f"; then
-              examples+=("$f")
-            fi
-          done
-          if [ ${#cases[@]} -eq 0 ] && [ ${#examples[@]} -eq 0 ]; then
-            echo "для бота $BOT нет ни кейсов в манифесте, ни примеров с source=$BOT" >&2
+          # После В4 корпус один: бывшие примеры переехали в cases/ и объявлены
+          # в манифесте extras'ами, поэтому отбираются той же командой select
+          # (выше) — отдельный glob по source больше не нужен, и его отсутствие
+          # не должно ронять прогон. Если select ничего не вернул — это реальная
+          # дыра (бот вне манифеста), и шаг падает.
+          if [ ${#cases[@]} -eq 0 ]; then
+            echo "для бота $BOT нет кейсов в манифесте покрытия" >&2
             exit 1
           fi
           echo "кейсы: ${cases[*]:-нет}"
-          echo "примеры: ${examples[*]:-нет}"
-          botkit-farm run "${cases[@]}" "${examples[@]}" \
+          botkit-farm run "${cases[@]}" \
             --source "$GITHUB_WORKSPACE/${{ inputs.source }}" \
             --junit "$GITHUB_WORKSPACE/farm-smoke.xml"
 

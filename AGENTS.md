@@ -29,7 +29,7 @@ These are enforced in CI (ci.yml, mutation.yml, release.yml). Do not work around
 5. **Never weaken a gate to make a build green.** Load-bearing: `ruff`,
    `ruff format --check`, `mypy` (strict), `bandit`, `gitleaks`, `Trivy`,
    `scripts/check-repo-contract.py`, `botkit-farm coverage --check cases`,
-   `botkit-farm catalog --check examples`, `botkit-farm migrate --check`, and
+   `botkit-farm catalog --check cases`, `botkit-farm migrate --check`, and
    the sandbox check. `pre-commit` mirrors part of this locally; it is not a CI
    gate, so "pre-commit is green" does not stand in for the CI list.
 6. **Never run foreign code outside the sandbox.** The farm executes other
