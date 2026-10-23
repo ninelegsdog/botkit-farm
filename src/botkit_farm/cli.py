@@ -585,7 +585,7 @@ def main(argv: list[str] | None = None) -> int:
 
     p_catalog = sub.add_parser("catalog", help="показать и проверить каталог регрессов")
     p_catalog.add_argument(
-        "target", nargs="?", default=str(EXAMPLES_DIR), help="каталог с манифестом catalog.json"
+        "target", nargs="?", default=str(CASES_DIR), help="каталог с манифестом catalog.json"
     )
     p_catalog.add_argument(
         "--check",

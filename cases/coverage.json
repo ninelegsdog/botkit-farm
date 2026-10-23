@@ -198,6 +198,81 @@
       "bot": "botkit-store",
       "case": "store-empty-cart-checkout.yaml",
       "why": "пустая корзина: отказ на границе оформления заказа; оформление заказа уже объявлено обязательством (store-checkout-creates-order)"
+    },
+    {
+      "bot": "botkit-bookingbot",
+      "case": "booking-happy-path.yaml",
+      "why": "покрытие: booking-flow — полный путь записи клиента (botkit-bookingbot)"
+    },
+    {
+      "bot": "botkit-store",
+      "case": "store-catalog-to-cart.yaml",
+      "why": "покрытие: store-flow — каталог и корзина (botkit-store)"
+    },
+    {
+      "bot": "botkit-store",
+      "case": "store-cart-repeat.yaml",
+      "why": "покрытие: ТЗ C6 — choice (первое доступное действие) и repeat: товар добавлен дважды, корзина показывает x2 (botkit-store)"
+    },
+    {
+      "bot": "botkit-delivery",
+      "case": "delivery-order-status.yaml",
+      "why": "покрытие: delivery-flow — поиск заказа и автомат статусов (botkit-delivery)"
+    },
+    {
+      "bot": "botkit-docuflow",
+      "case": "docuflow-doc-generate.yaml",
+      "why": "покрытие: docuflow-generate — форма из нескольких полей и выдача PDF (botkit-docuflow)"
+    },
+    {
+      "bot": "botkit-docuflow",
+      "case": "docuflow-doc-short.yaml",
+      "why": "покрытие: docuflow-generate — форма из одного поля, короткий путь (botkit-docuflow)"
+    },
+    {
+      "bot": "botkit-leadgen",
+      "case": "leadgen-happy-path.yaml",
+      "why": "покрытие: leadgen-flow — сбор заявки от услуги до подтверждения (botkit-leadgen)"
+    },
+    {
+      "bot": "botkit-leadgen",
+      "case": "leadgen-cancel.yaml",
+      "why": "покрытие: leadgen-flow — отмена заявки на последнем шаге (botkit-leadgen)"
+    },
+    {
+      "bot": "botkit-membership",
+      "case": "membership-subscribe-happy-path.yaml",
+      "why": "покрытие: membership-flow — выбор тарифа и оформление подписки (botkit-membership)"
+    },
+    {
+      "bot": "botkit-membership",
+      "case": "membership-toast-autorenew.yaml",
+      "why": "дефект: всплывающее уведомление обязано попадать в отчёт, а не теряться (botkit-membership)"
+    },
+    {
+      "bot": "botkit-membership",
+      "case": "membership-webhook.yaml",
+      "why": "покрытие: режим webhook — update идёт POST'ом через сервер бота и даёт тот же Turn, что polling (botkit-membership)"
+    },
+    {
+      "bot": "botkit-pricesentry",
+      "case": "pricesentry-saved-item-history.yaml",
+      "why": "покрытие: pricesentry-flow — карточка товара, история цен, уведомление (botkit-pricesentry)"
+    },
+    {
+      "bot": "botkit-reminder",
+      "case": "reminder-create-and-list.yaml",
+      "why": "покрытие: reminder-flow — создание напоминания и список, поколение reminder (botkit-reminder)"
+    },
+    {
+      "bot": "botkit-support",
+      "case": "support-ticket-flow.yaml",
+      "why": "покрытие: support-flow — создание тикета и история обращений (botkit-support)"
+    },
+    {
+      "bot": "botkit-support",
+      "case": "support-close-and-rate.yaml",
+      "why": "покрытие: support-flow — цепочка зависимых кнопок: закрытие и оценка (botkit-support)"
     }
   ]
 }
