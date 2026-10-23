@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+import pathlib
 from types import SimpleNamespace
 from typing import Any
 
@@ -45,6 +46,17 @@ def _check(
     exp: dict[str, Any], replies: list[str], buttons: list[str], idx: int = 0, label: str = "шаг"
 ) -> list[Any]:
     return engine._check(Expect.model_validate(exp), idx, label, replies, buttons)
+
+
+def test_начальный_результат_несёт_source_кейса():
+    """Поле source отчёта обязано браться из кейса, а не подменяться.
+
+    Мутанты в `_начальный_результат` меняли getattr/имя атрибута/default —
+    без этого теста они проходили, и отчёт врал об источнике прогона.
+    """
+    case = _case(source="https://example.invalid/bot")
+    res = engine._начальный_результат(case, pathlib.Path("bot-dir"))
+    assert res.source == "https://example.invalid/bot"
 
 
 # ── text_contains ───────────────────────────────────────────────────────────

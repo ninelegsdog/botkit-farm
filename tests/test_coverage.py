@@ -202,6 +202,50 @@ def test_positive_привязан_к_callback_кейсу_ловится(tmp_pat
     assert any("обещает positive" in p and "gate" in p for p in problems), problems
 
 
+# ── закрытие выживших мутантов (mutation gate) ─────────────────────────────
+#
+# Мутанты ниже меняли сообщение об ошибке или группировку, и без теста на
+# конкретное поведение проходили. Каждый тест ниже убивает свой класс.
+
+
+def test_отсутствующий_манифест_даёт_понятную_ошибку(tmp_path):
+    """Текст ошибки при отсутствии манифеста — часть контракта, не косметика."""
+    with pytest.raises(CoverageError, match=r"^нет манифеста покрытия:"):
+        coverage.load(tmp_path)
+
+
+def test_отсутствующий_реестр_флота_даёт_понятную_ошибку(tmp_path):
+    with pytest.raises(CoverageError, match=r"^нет реестра флота:"):
+        coverage.load_fleet(tmp_path)
+
+
+def test_check_без_реестра_флота_возвращает_проблему_а_не_падает(tmp_path):
+    """Отсутствующий fleet.json → проблема в списке; мутант с default '' падает
+    с AttributeError, потому что '' is not None."""
+    _write(tmp_path, "ok.yaml", positive=True, cid="happy")
+    _manifest(tmp_path, [_entry("bot-x", "работа", "ok.yaml", "positive")])
+    problems = check(tmp_path)
+    assert any("нет реестра флота" in p for p in problems), problems
+
+
+def test_check_группирует_обязательства_по_боту(tmp_path):
+    """Бот только с gate обязан получить замечание о нехватке positive — даже
+    если у другого бота positive есть. Мутант, группирующий всё под None,
+    скрыл бы отсутствие."""
+    _write(tmp_path, "ok.yaml", positive=True, cid="happy")
+    _write(tmp_path, "gate.yaml", positive=False, cid="only-gate")
+    _manifest(
+        tmp_path,
+        [
+            _entry("bot-x", "отказ", "gate.yaml", "gate"),
+            _entry("bot-y", "работа", "ok.yaml", "positive"),
+        ],
+    )
+    _fleet(tmp_path, ["bot-x", "bot-y"])
+    problems = check(tmp_path)
+    assert any(p.startswith("bot-x:") and "ни одного positive" in p for p in problems), problems
+
+
 def test_пропавший_кейс_ловится(tmp_path):
     """Обязательство ссылается на файл, которого нет.
 
@@ -236,7 +280,7 @@ def test_бот_без_positive_ловится(tmp_path):
     _manifest(tmp_path, [_entry("bot-x", "отказ", "gate.yaml", "gate")])
     _fleet(tmp_path, ["bot-x"])
     problems = check(tmp_path)
-    assert any("bot-x" in p and "positive" in p for p in problems), problems
+    assert any(p.startswith("bot-x:") and "ни одного positive" in p for p in problems), problems
 
 
 def test_нет_манифеста_не_зелёный(tmp_path):

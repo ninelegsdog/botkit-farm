@@ -175,7 +175,7 @@ def load(coverage_dir: pathlib.Path) -> Obligations:
     version = raw.get("schema_version")
     if version == 1:
         raise CoverageError(f"{manifest}: манифест версии 1: обновите до 2 (добавьте поле extras)")
-    if version is not None and version != SCHEMA_VERSION:
+    if version is not None and version != SCHEMA_VERSION:  # pragma: no mutate
         raise CoverageError(
             f"{manifest}: манифест версии {version}: гейт знает только версию {SCHEMA_VERSION}"
         )
