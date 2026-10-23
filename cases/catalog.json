@@ -1,0 +1,255 @@
+{
+  "schema_version": 1,
+  "regressions": [
+    {
+      "id": "booking-cancel-releases-slot",
+      "case": "booking-cancel-releases-slot.yaml",
+      "why": "покрытие: bookingbot — отмена записи снимает её и освобождает слот"
+    },
+    {
+      "id": "booking-happy-path",
+      "case": "booking-happy-path.yaml",
+      "why": "покрытие: booking-flow — полный путь записи клиента (botkit-bookingbot)"
+    },
+    {
+      "id": "booking-idor-guard",
+      "case": "booking-idor-guard.yaml",
+      "why": "покрытие: booking — гость шлёт админский callback_data, гард отказывает (IDOR)"
+    },
+    {
+      "id": "booking-no-free-slots",
+      "case": "booking-no-free-slots.yaml",
+      "why": "покрытие: bookingbot — нет свободных слотов: бот сообщает, диалог не роняет"
+    },
+    {
+      "id": "booking-repeat-from-confirm",
+      "case": "booking-repeat-from-confirm.yaml",
+      "why": "покрытие: bookingbot — кнопка «Записаться» из подтверждения возвращает в начало"
+    },
+    {
+      "id": "bookingbot-admin-flow",
+      "case": "bookingbot-admin-flow.yaml",
+      "why": "покрытие: bookingbot — админ/гость и callback через require_admin+wraps"
+    },
+    {
+      "id": "delivery-admin-guard",
+      "case": "delivery-admin-guard.yaml",
+      "why": "покрытие: delivery — не-админ не проходит по guarded callback/reply (IDOR)"
+    },
+    {
+      "id": "delivery-bad-order-number",
+      "case": "delivery-bad-order-number.yaml",
+      "why": "покрытие: delivery — неверный номер заказа даёт подсказку, диалог жив"
+    },
+    {
+      "id": "delivery-cancelled-not-success",
+      "case": "delivery-cancelled-not-success.yaml",
+      "why": "покрытие: delivery — отмена создания заказа не выдаёт заказ за созданный"
+    },
+    {
+      "id": "delivery-idor-guard",
+      "case": "delivery-idor-guard.yaml",
+      "why": "покрытие: delivery — гость шлёт админский callback_data и молчит (IDOR)"
+    },
+    {
+      "id": "delivery-order-status",
+      "case": "delivery-order-status.yaml",
+      "why": "покрытие: delivery-flow — поиск заказа и автомат статусов (botkit-delivery)"
+    },
+    {
+      "id": "delivery-status-change-notifies",
+      "case": "delivery-status-change-notifies.yaml",
+      "why": "покрытие: delivery — смена статуса уведомляет подписавшегося клиента"
+    },
+    {
+      "id": "docuflow-admin-guard",
+      "case": "docuflow-admin-guard.yaml",
+      "why": "покрытие: docuflow — не-админ не может нажимать админ-кнопку"
+    },
+    {
+      "id": "docuflow-bad-amount",
+      "case": "docuflow-bad-amount.yaml",
+      "why": "покрытие: docuflow — нечисловая сумма отклоняется с подсказкой, документ собирается"
+    },
+    {
+      "id": "docuflow-doc-generate",
+      "case": "docuflow-doc-generate.yaml",
+      "why": "покрытие: docuflow-generate — форма из нескольких полей и выдача PDF (botkit-docuflow)"
+    },
+    {
+      "id": "docuflow-doc-short",
+      "case": "docuflow-doc-short.yaml",
+      "why": "покрытие: docuflow-generate — форма из одного поля, короткий путь (botkit-docuflow)"
+    },
+    {
+      "id": "docuflow-repeat-keeps-version",
+      "case": "docuflow-repeat-keeps-version.yaml",
+      "why": "покрытие: docuflow — вторая генерация не затирает первый документ"
+    },
+    {
+      "id": "leadgen-admin-guard",
+      "case": "leadgen-admin-guard.yaml",
+      "why": "покрытие: leadgen — админ-guard на reply-кнопках"
+    },
+    {
+      "id": "leadgen-cancel",
+      "case": "leadgen-cancel.yaml",
+      "why": "покрытие: leadgen-flow — отмена заявки на последнем шаге (botkit-leadgen)"
+    },
+    {
+      "id": "leadgen-happy-path",
+      "case": "leadgen-happy-path.yaml",
+      "why": "покрытие: leadgen-flow — сбор заявки от услуги до подтверждения (botkit-leadgen)"
+    },
+    {
+      "id": "leadgen-long-free-text",
+      "case": "leadgen-long-free-text.yaml",
+      "why": "покрытие: leadgen — длинный свободный текст не роняет диалог"
+    },
+    {
+      "id": "leadgen-no-contact",
+      "case": "leadgen-no-contact.yaml",
+      "why": "покрытие: leadgen — заявка без валидного контакта не принимается"
+    },
+    {
+      "id": "leadgen-queue-guard",
+      "case": "leadgen-queue-guard.yaml",
+      "why": "покрытие: leadgen — «Очередь лидов» отвечает только менеджеру или админу"
+    },
+    {
+      "id": "leadgen-second-lead-keeps-first",
+      "case": "leadgen-second-lead-keeps-first.yaml",
+      "why": "покрытие: leadgen — вторая заявка не затирает первую"
+    },
+    {
+      "id": "membership-admin-flow",
+      "case": "membership-admin-flow.yaml",
+      "why": "покрытие: membership — админ/гость и callback require_admin+wraps"
+    },
+    {
+      "id": "membership-expired-closes-access",
+      "case": "membership-expired-closes-access.yaml",
+      "why": "покрытие: membership — истёкшая подписка не пускает в материалы клуба"
+    },
+    {
+      "id": "membership-idor-guard",
+      "case": "membership-idor-guard.yaml",
+      "why": "покрытие: membership — гость шлёт админский callback_data, гард отказывает (IDOR)"
+    },
+    {
+      "id": "membership-subscribe-happy-path",
+      "case": "membership-subscribe-happy-path.yaml",
+      "why": "покрытие: membership-flow — выбор тарифа и оформление подписки (botkit-membership)"
+    },
+    {
+      "id": "membership-toast-autorenew",
+      "case": "membership-toast-autorenew.yaml",
+      "why": "дефект: всплывающее уведомление обязано попадать в отчёт, а не теряться (botkit-membership)"
+    },
+    {
+      "id": "membership-webhook",
+      "case": "membership-webhook.yaml",
+      "why": "покрытие: режим webhook — update идёт POST'ом через сервер бота и даёт тот же Turn, что polling (botkit-membership)"
+    },
+    {
+      "id": "pricesentry-admin-guard",
+      "case": "pricesentry-admin-guard.yaml",
+      "why": "покрытие: pricesentry — админ-guard на reply-кнопках"
+    },
+    {
+      "id": "pricesentry-alert-on-change",
+      "case": "pricesentry-alert-on-change.yaml",
+      "why": "покрытие: pricesentry — уведомление о снижении содержит было/стало"
+    },
+    {
+      "id": "pricesentry-new-item-empty-history",
+      "case": "pricesentry-new-item-empty-history.yaml",
+      "why": "покрытие: pricesentry — товар без истории показывает карточку, а не падает"
+    },
+    {
+      "id": "pricesentry-remove-clears-notifications",
+      "case": "pricesentry-remove-clears-notifications.yaml",
+      "why": "покрытие: pricesentry — удаление чистит уведомления, новая позиция без истории"
+    },
+    {
+      "id": "pricesentry-remove-stops-alerts",
+      "case": "pricesentry-remove-stops-alerts.yaml",
+      "why": "покрытие: pricesentry — убранная позиция исчезает из списка мониторинга"
+    },
+    {
+      "id": "pricesentry-saved-item-history",
+      "case": "pricesentry-saved-item-history.yaml",
+      "why": "покрытие: pricesentry-flow — карточка товара, история цен, уведомление (botkit-pricesentry)"
+    },
+    {
+      "id": "reminder-admin-guard",
+      "case": "reminder-admin-guard.yaml",
+      "why": "покрытие: reminder — не-админ молчит, админ авторизуется паролем"
+    },
+    {
+      "id": "reminder-broadcast-segment",
+      "case": "reminder-broadcast-segment.yaml",
+      "why": "покрытие: reminder — рассылка доходит до активного подписчика"
+    },
+    {
+      "id": "reminder-create-and-list",
+      "case": "reminder-create-and-list.yaml",
+      "why": "покрытие: reminder-flow — создание напоминания и список, поколение reminder (botkit-reminder)"
+    },
+    {
+      "id": "reminder-unsubscribe-stops",
+      "case": "reminder-unsubscribe-stops.yaml",
+      "why": "покрытие: reminder — отписка видима, неполучение рассылки уровень 1 не доказывает"
+    },
+    {
+      "id": "store-admin-guard",
+      "case": "store-admin-guard.yaml",
+      "why": "покрытие: store — gate-only: не-админ молчит, админ авторизуется паролем"
+    },
+    {
+      "id": "store-cart-repeat",
+      "case": "store-cart-repeat.yaml",
+      "why": "покрытие: ТЗ C6 — choice (первое доступное действие) и repeat: товар добавлен дважды, корзина показывает x2 (botkit-store)"
+    },
+    {
+      "id": "store-catalog-to-cart",
+      "case": "store-catalog-to-cart.yaml",
+      "why": "покрытие: store-flow — каталог и корзина (botkit-store)"
+    },
+    {
+      "id": "store-checkout-creates-order",
+      "case": "store-checkout-creates-order.yaml",
+      "why": "покрытие: store — оформление корзины создаёт заказ и чистит корзину"
+    },
+    {
+      "id": "store-empty-cart-checkout",
+      "case": "store-empty-cart-checkout.yaml",
+      "why": "покрытие: store — пустая корзина отвечает «Корзина пуста», а не падает"
+    },
+    {
+      "id": "store-idor-guard",
+      "case": "store-idor-guard.yaml",
+      "why": "покрытие: store — гость шлёт чужой callback_data выдачи, payload не утекает (IDOR)"
+    },
+    {
+      "id": "support-admin-guard",
+      "case": "support-admin-guard.yaml",
+      "why": "покрытие: support — gate-only: не-админ молчит, админ авторизуется паролем"
+    },
+    {
+      "id": "support-close-and-rate",
+      "case": "support-close-and-rate.yaml",
+      "why": "покрытие: support-flow — цепочка зависимых кнопок: закрытие и оценка (botkit-support)"
+    },
+    {
+      "id": "support-ticket-flow",
+      "case": "support-ticket-flow.yaml",
+      "why": "покрытие: support-flow — создание тикета и история обращений (botkit-support)"
+    },
+    {
+      "id": "support-ticket-lifecycle",
+      "case": "support-ticket-lifecycle.yaml",
+      "why": "покрытие: support — клиент создаёт тикет и видит его в «Мои тикеты»"
+    }
+  ]
+}

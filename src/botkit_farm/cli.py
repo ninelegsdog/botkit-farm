@@ -1,10 +1,12 @@
-"""CLI фермы: study, run, list, doctor, init, migrate, catalog.
+"""CLI фермы: study, run, list, doctor, init, migrate, catalog, coverage, select.
 
-Один вход, семь команд, и каждая отвечает на один вопрос владельца:
+Один вход, девять команд, и каждая отвечает на один вопрос владельца:
 `study` — «что этот бот умеет», `list` — «какие кейсы есть», `run` — «работает
 ли бот», `doctor` — «почему не работает стенд», `init` — «как завести кейсы
 рядом с ботом», `migrate` — «схема кейсов ещё та, что мы ждём», `catalog` —
-«целы ли регрессы, которыми мы обещаем ловить возвраты».
+«целы ли регрессы, которыми мы обещаем ловить возвраты», `coverage` — «у каждого
+бота есть кейс на ключевой поток», `select` — «какие кейсы CI прогоняет для
+этого бота».
 
 Про `doctor` отдельно: почти каждая «ферма не работает» — это не баг, а
 неподнятый Redis или отсутствующая подложка. Диагностика, которая называет
@@ -298,6 +300,44 @@ def _coverage(target: str, check: bool) -> int:
     return 1 if problems else 0
 
 
+# ── select ───────────────────────────────────────────────────────────────────
+
+
+def _select(bot: str, cases_dir: str) -> int:
+    """Выбрать кейсы бота по манифесту покрытия — ровно то, что прогонит CI.
+
+    Печатает по одному пути к файлу кейса, в порядке по имени. Имя бота
+    нормализуется: `bookingbot` и `botkit-bookingbot` — один и тот же бот.
+
+    Кейс, объявленный в манифесте, но отсутствующий на диске, — ошибка с
+    ненулевым кодом: пропуск молча вернул бы «зелёный» CI без проверки, то
+    есть ровно тот дефект, который команда пришла чинить.
+    """
+    from botkit_farm import selection
+
+    root = pathlib.Path(cases_dir).expanduser()
+    if not root.is_dir():
+        print(f"каталог кейсов не найден: {root}")
+        return 2
+
+    try:
+        paths = selection.cases_for_bot(bot, root)
+    except selection.SelectionError as exc:
+        print(f"отбор не удался: {exc}", file=sys.stderr)
+        return 1
+
+    if not paths:
+        # Не ошибка: у бота может не быть кейсов в cases/ (примеры живут в
+        # examples/ и отбираются отдельно). Но молчать нельзя — решение «ни
+        # одного кейса» принимает CI, и оно должно быть видимым.
+        print(f"бот {bot} не объявлен в манифесте покрытия: ни одного кейса", file=sys.stderr)
+        return 0
+
+    for path in paths:
+        print(path)
+    return 0
+
+
 # ── run ─────────────────────────────────────────────────────────────────────
 
 
@@ -393,6 +433,11 @@ async def _run_one(
             cache_dir=ENVS_DIR,
             work_dir=WORK_DIR,
         )
+        if not getattr(result, "source", ""):
+            import contextlib
+
+            with contextlib.suppress(Exception):
+                result.source = getattr(case, "source", "") or ""
         await _shoot(case, result)
         report = write_report(result, REPORTS_DIR)
         print(f"  → {result.status.value.upper()}  {result.steps_done}/{result.steps_total} шагов")
@@ -540,7 +585,7 @@ def main(argv: list[str] | None = None) -> int:
 
     p_catalog = sub.add_parser("catalog", help="показать и проверить каталог регрессов")
     p_catalog.add_argument(
-        "target", nargs="?", default=str(EXAMPLES_DIR), help="каталог с манифестом catalog.json"
+        "target", nargs="?", default=str(CASES_DIR), help="каталог с манифестом catalog.json"
     )
     p_catalog.add_argument(
         "--check",
@@ -560,6 +605,19 @@ def main(argv: list[str] | None = None) -> int:
     )
     p_coverage.set_defaults(fn=None)
 
+    p_select = sub.add_parser("select", help="выбрать кейсы бота по манифесту покрытия")
+    p_select.add_argument(
+        "--bot",
+        required=True,
+        help="имя бота: bookingbot или botkit-bookingbot — это один и тот же бот",
+    )
+    p_select.add_argument(
+        "--cases-dir",
+        default=str(CASES_DIR),
+        help="каталог кейсов с манифестом coverage.json",
+    )
+    p_select.set_defaults(fn=None)
+
     args = ap.parse_args(argv)
     try:
         if args.cmd == "doctor":
@@ -576,6 +634,8 @@ def main(argv: list[str] | None = None) -> int:
             return _catalog(args.target, args.check)
         if args.cmd == "coverage":
             return _coverage(args.target, args.check)
+        if args.cmd == "select":
+            return _select(args.bot, args.cases_dir)
         return asyncio.run(_run(args))
     except KeyboardInterrupt:
         print("\nпрервано")

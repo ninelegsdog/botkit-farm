@@ -1,31 +1,278 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "obligations": [
-    {"bot": "botkit-bookingbot", "flow": "запись клиента", "case": "booking-repeat-from-confirm.yaml", "kind": "positive"},
-    {"bot": "botkit-bookingbot", "flow": "вход админа", "case": "bookingbot-admin-flow.yaml", "kind": "positive"},
-
-    {"bot": "botkit-delivery", "flow": "поиск заказа и статус", "case": "delivery-status-change-notifies.yaml", "kind": "positive"},
-    {"bot": "botkit-delivery", "flow": "админ-гейт / IDOR", "case": "delivery-idor-guard.yaml", "kind": "gate"},
-
-    {"bot": "botkit-docuflow", "flow": "генерация документа", "case": "docuflow-repeat-keeps-version.yaml", "kind": "positive"},
-    {"bot": "botkit-docuflow", "flow": "админ-гейт", "case": "docuflow-admin-guard.yaml", "kind": "gate"},
-
-    {"bot": "botkit-leadgen", "flow": "приём заявки", "case": "leadgen-second-lead-keeps-first.yaml", "kind": "positive"},
-    {"bot": "botkit-leadgen", "flow": "админ-гейт / очередь", "case": "leadgen-queue-guard.yaml", "kind": "gate"},
-
-    {"bot": "botkit-membership", "flow": "жизненный цикл подписки", "case": "membership-expired-closes-access.yaml", "kind": "positive"},
-    {"bot": "botkit-membership", "flow": "вход админа", "case": "membership-admin-flow.yaml", "kind": "positive"},
-
-    {"bot": "botkit-pricesentry", "flow": "уведомление об изменении цены", "case": "pricesentry-alert-on-change.yaml", "kind": "positive"},
-    {"bot": "botkit-pricesentry", "flow": "админ-гейт", "case": "pricesentry-admin-guard.yaml", "kind": "gate"},
-
-    {"bot": "botkit-reminder", "flow": "рассылка по сегменту", "case": "reminder-broadcast-segment.yaml", "kind": "positive"},
-    {"bot": "botkit-reminder", "flow": "админ-гейт", "case": "reminder-admin-guard.yaml", "kind": "gate"},
-
-    {"bot": "botkit-store", "flow": "оформление заказа", "case": "store-checkout-creates-order.yaml", "kind": "positive"},
-    {"bot": "botkit-store", "flow": "админ-гейт", "case": "store-admin-guard.yaml", "kind": "gate"},
-
-    {"bot": "botkit-support", "flow": "жизненный цикл тикета", "case": "support-ticket-lifecycle.yaml", "kind": "positive"},
-    {"bot": "botkit-support", "flow": "админ-гейт", "case": "support-admin-guard.yaml", "kind": "gate"}
+    {
+      "bot": "botkit-bookingbot",
+      "flow": "запись клиента",
+      "case": "booking-repeat-from-confirm.yaml",
+      "kind": "positive"
+    },
+    {
+      "bot": "botkit-bookingbot",
+      "flow": "вход админа",
+      "case": "bookingbot-admin-flow.yaml",
+      "kind": "positive"
+    },
+    {
+      "bot": "botkit-delivery",
+      "flow": "поиск заказа и статус",
+      "case": "delivery-status-change-notifies.yaml",
+      "kind": "positive"
+    },
+    {
+      "bot": "botkit-delivery",
+      "flow": "админ-гейт / IDOR",
+      "case": "delivery-idor-guard.yaml",
+      "kind": "gate"
+    },
+    {
+      "bot": "botkit-docuflow",
+      "flow": "генерация документа",
+      "case": "docuflow-repeat-keeps-version.yaml",
+      "kind": "positive"
+    },
+    {
+      "bot": "botkit-docuflow",
+      "flow": "админ-гейт",
+      "case": "docuflow-admin-guard.yaml",
+      "kind": "gate"
+    },
+    {
+      "bot": "botkit-leadgen",
+      "flow": "приём заявки",
+      "case": "leadgen-second-lead-keeps-first.yaml",
+      "kind": "positive"
+    },
+    {
+      "bot": "botkit-leadgen",
+      "flow": "админ-гейт / очередь",
+      "case": "leadgen-queue-guard.yaml",
+      "kind": "gate"
+    },
+    {
+      "bot": "botkit-membership",
+      "flow": "жизненный цикл подписки",
+      "case": "membership-expired-closes-access.yaml",
+      "kind": "positive"
+    },
+    {
+      "bot": "botkit-membership",
+      "flow": "вход админа",
+      "case": "membership-admin-flow.yaml",
+      "kind": "positive"
+    },
+    {
+      "bot": "botkit-pricesentry",
+      "flow": "уведомление об изменении цены",
+      "case": "pricesentry-alert-on-change.yaml",
+      "kind": "positive"
+    },
+    {
+      "bot": "botkit-pricesentry",
+      "flow": "админ-гейт",
+      "case": "pricesentry-admin-guard.yaml",
+      "kind": "gate"
+    },
+    {
+      "bot": "botkit-reminder",
+      "flow": "рассылка по сегменту",
+      "case": "reminder-broadcast-segment.yaml",
+      "kind": "positive"
+    },
+    {
+      "bot": "botkit-reminder",
+      "flow": "админ-гейт",
+      "case": "reminder-admin-guard.yaml",
+      "kind": "gate"
+    },
+    {
+      "bot": "botkit-store",
+      "flow": "оформление заказа",
+      "case": "store-checkout-creates-order.yaml",
+      "kind": "positive"
+    },
+    {
+      "bot": "botkit-store",
+      "flow": "админ-гейт",
+      "case": "store-admin-guard.yaml",
+      "kind": "gate"
+    },
+    {
+      "bot": "botkit-support",
+      "flow": "жизненный цикл тикета",
+      "case": "support-ticket-lifecycle.yaml",
+      "kind": "positive"
+    },
+    {
+      "bot": "botkit-support",
+      "flow": "админ-гейт",
+      "case": "support-admin-guard.yaml",
+      "kind": "gate"
+    },
+    {
+      "bot": "botkit-bookingbot",
+      "flow": "админ-гейт / IDOR",
+      "case": "booking-idor-guard.yaml",
+      "kind": "gate"
+    },
+    {
+      "bot": "botkit-membership",
+      "flow": "админ-гейт / IDOR",
+      "case": "membership-idor-guard.yaml",
+      "kind": "gate"
+    },
+    {
+      "bot": "botkit-store",
+      "flow": "админ-гейт / IDOR",
+      "case": "store-idor-guard.yaml",
+      "kind": "gate"
+    }
+  ],
+  "extras": [
+    {
+      "bot": "botkit-bookingbot",
+      "case": "booking-cancel-releases-slot.yaml",
+      "why": "отмена уже созданной записи: ключевой поток бота — создание записи (booking-repeat-from-confirm), а здесь проверяется освобождение слота, то есть следствие, а не отдельный поток"
+    },
+    {
+      "bot": "botkit-bookingbot",
+      "case": "booking-no-free-slots.yaml",
+      "why": "ветка «нет свободных дат»: отказ по состоянию расписания, а не работа потока; успешная запись уже объявлена обязательством"
+    },
+    {
+      "bot": "botkit-delivery",
+      "case": "delivery-admin-guard.yaml",
+      "why": "админ-отказ на reply-кнопке: тот же класс, что и объявленный delivery-idor-guard, отдельного потока не открывает"
+    },
+    {
+      "bot": "botkit-delivery",
+      "case": "delivery-bad-order-number.yaml",
+      "why": "неверный номер заказа: клиентский отказ внутри поиска; ключевой поток бота — успешный поиск и смена статуса (delivery-status-change-notifies)"
+    },
+    {
+      "bot": "botkit-delivery",
+      "case": "delivery-cancelled-not-success.yaml",
+      "why": "отмена создания заказа админом: проверяет, что отменённый заказ не выдан за созданный, — гигиена админ-пути, а не поток клиента"
+    },
+    {
+      "bot": "botkit-docuflow",
+      "case": "docuflow-bad-amount.yaml",
+      "why": "нечисловая сумма: проверка ввода поля; генерация документа уже объявлена обязательством (docuflow-repeat-keeps-version)"
+    },
+    {
+      "bot": "botkit-leadgen",
+      "case": "leadgen-admin-guard.yaml",
+      "why": "админ-отказ на reply-кнопке: тот же класс, что и объявленный leadgen-queue-guard (очередь заявок), отдельного потока нет"
+    },
+    {
+      "bot": "botkit-leadgen",
+      "case": "leadgen-long-free-text.yaml",
+      "why": "устойчивость к длинному свободному вводу: крайний случай, а не отдельный поток; приём заявки объявлен обязательством"
+    },
+    {
+      "bot": "botkit-leadgen",
+      "case": "leadgen-no-contact.yaml",
+      "why": "невалидный телефон: валидация поля внутри приёма заявки, отдельного потока не добавляет"
+    },
+    {
+      "bot": "botkit-pricesentry",
+      "case": "pricesentry-new-item-empty-history.yaml",
+      "why": "карточка товара без истории цен: состояние данных, а не поток мониторинга; ключевой поток — уведомление об изменении цены (объявлен)"
+    },
+    {
+      "bot": "botkit-pricesentry",
+      "case": "pricesentry-remove-clears-notifications.yaml",
+      "why": "удаление товара вместе с уведомлениями: чистка состояния, а не поток мониторинга цены"
+    },
+    {
+      "bot": "botkit-pricesentry",
+      "case": "pricesentry-remove-stops-alerts.yaml",
+      "why": "исчезновение позиции из списка мониторинга: та же операция удаления с другой стороны, отдельного потока нет"
+    },
+    {
+      "bot": "botkit-reminder",
+      "case": "reminder-unsubscribe-stops.yaml",
+      "why": "отписка видна клиенту: обратная сторона подписки, а не отдельный поток; рассылка по сегменту объявлена обязательством"
+    },
+    {
+      "bot": "botkit-store",
+      "case": "store-empty-cart-checkout.yaml",
+      "why": "пустая корзина: отказ на границе оформления заказа; оформление заказа уже объявлено обязательством (store-checkout-creates-order)"
+    },
+    {
+      "bot": "botkit-bookingbot",
+      "case": "booking-happy-path.yaml",
+      "why": "покрытие: booking-flow — полный путь записи клиента (botkit-bookingbot)"
+    },
+    {
+      "bot": "botkit-store",
+      "case": "store-catalog-to-cart.yaml",
+      "why": "покрытие: store-flow — каталог и корзина (botkit-store)"
+    },
+    {
+      "bot": "botkit-store",
+      "case": "store-cart-repeat.yaml",
+      "why": "покрытие: ТЗ C6 — choice (первое доступное действие) и repeat: товар добавлен дважды, корзина показывает x2 (botkit-store)"
+    },
+    {
+      "bot": "botkit-delivery",
+      "case": "delivery-order-status.yaml",
+      "why": "покрытие: delivery-flow — поиск заказа и автомат статусов (botkit-delivery)"
+    },
+    {
+      "bot": "botkit-docuflow",
+      "case": "docuflow-doc-generate.yaml",
+      "why": "покрытие: docuflow-generate — форма из нескольких полей и выдача PDF (botkit-docuflow)"
+    },
+    {
+      "bot": "botkit-docuflow",
+      "case": "docuflow-doc-short.yaml",
+      "why": "покрытие: docuflow-generate — форма из одного поля, короткий путь (botkit-docuflow)"
+    },
+    {
+      "bot": "botkit-leadgen",
+      "case": "leadgen-happy-path.yaml",
+      "why": "покрытие: leadgen-flow — сбор заявки от услуги до подтверждения (botkit-leadgen)"
+    },
+    {
+      "bot": "botkit-leadgen",
+      "case": "leadgen-cancel.yaml",
+      "why": "покрытие: leadgen-flow — отмена заявки на последнем шаге (botkit-leadgen)"
+    },
+    {
+      "bot": "botkit-membership",
+      "case": "membership-subscribe-happy-path.yaml",
+      "why": "покрытие: membership-flow — выбор тарифа и оформление подписки (botkit-membership)"
+    },
+    {
+      "bot": "botkit-membership",
+      "case": "membership-toast-autorenew.yaml",
+      "why": "дефект: всплывающее уведомление обязано попадать в отчёт, а не теряться (botkit-membership)"
+    },
+    {
+      "bot": "botkit-membership",
+      "case": "membership-webhook.yaml",
+      "why": "покрытие: режим webhook — update идёт POST'ом через сервер бота и даёт тот же Turn, что polling (botkit-membership)"
+    },
+    {
+      "bot": "botkit-pricesentry",
+      "case": "pricesentry-saved-item-history.yaml",
+      "why": "покрытие: pricesentry-flow — карточка товара, история цен, уведомление (botkit-pricesentry)"
+    },
+    {
+      "bot": "botkit-reminder",
+      "case": "reminder-create-and-list.yaml",
+      "why": "покрытие: reminder-flow — создание напоминания и список, поколение reminder (botkit-reminder)"
+    },
+    {
+      "bot": "botkit-support",
+      "case": "support-ticket-flow.yaml",
+      "why": "покрытие: support-flow — создание тикета и история обращений (botkit-support)"
+    },
+    {
+      "bot": "botkit-support",
+      "case": "support-close-and-rate.yaml",
+      "why": "покрытие: support-flow — цепочка зависимых кнопок: закрытие и оценка (botkit-support)"
+    }
   ]
 }

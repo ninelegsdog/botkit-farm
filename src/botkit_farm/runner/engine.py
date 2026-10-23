@@ -519,6 +519,7 @@ def _начальный_результат(case: Case, bot_dir: pathlib.Path) ->
         # шаг в несколько, и отчёт обязан считать по факту прогона.
         steps_total=len(_plan(case)),
         repo=str(bot_dir),
+        source=getattr(case, "source", "") or "",
     )
 
 

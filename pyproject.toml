@@ -173,6 +173,13 @@ only_mutate = [
   "src/botkit_farm/coverage.py",
   "src/botkit_farm/source.py",
 ]
+# Мутанты, признанные эквивалентными: строка `source=getattr(case, "source", "") or ""`
+# в `_начальный_результат` — `source` у Case обязателен и непуст (min_length=1),
+# поэтому default и `or ""` никогда не срабатывают; мутации их не меняют
+# наблюдаемый результат.
+do_not_mutate_patterns = [
+  'source=getattr\(case, "source"',
+]
 mutate_only_covered_lines = true
 # Отбор тестов: без рендера. Playwright на каждый мутант — минуты впустую, а
 # кадры вердикт кейса не проверяют.

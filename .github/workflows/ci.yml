@@ -70,13 +70,12 @@ jobs:
         # не пишет и падает на любом кейсе не текущей версии.
         run: |
           botkit-farm migrate --check cases
-          botkit-farm migrate --check examples
 
       - name: Каталог регрессов цел
         # ТЗ C5/ПД: удаление кейса регресса должно ронять CI. Проверка сверяет
-        # манифест examples/catalog.json с файлами в обе стороны: регресс пропал
+        # манифест cases/catalog.json с файлами в обе стороны: регресс пропал
         # или появился вне каталога — это падение здесь, а не молчание.
-        run: botkit-farm catalog --check examples
+        run: botkit-farm catalog --check cases
 
       - name: Покрытие ботов кейсами
         # ТЗ D-coverage: у каждого бота есть кейс на ключевой поток, а не только
