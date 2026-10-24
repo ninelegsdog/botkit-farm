@@ -180,3 +180,36 @@ Do not open a public issue for a security problem. See [SECURITY.md](SECURITY.md
 ## License
 
 MIT — see [LICENSE](LICENSE).
+
+## Как это работает
+
+Ферма прогоняет **реальные хендлеры aiogram** бота с фейковыми объектами `Update`/`Message`/`CallbackQuery`. Никакого поднятия настоящего бота в Telegram и реальных сетевых вызовов не требуется.
+
+```mermaid
+flowchart LR
+  A[Сценарий диалога] --> B[botkit-farm]
+  B --> C[Создание фейковых Update]
+  C --> D[Прогон через роутеры/хендлеры бота]
+  D --> E[Кадры диалога + ответы]
+  E --> F[Скриншоты/баг-репорт]
+```
+
+## Пример использования
+
+```python
+from botkit_farm import Farm
+
+farm = Farm(bot_module="src.bot")  # модуль с роутером бота
+scenario = ["/start", "Выбрать услугу", "Выбрать дату"]
+result = farm.run(scenario)
+farm.save_screenshots(result)  # сохраняет кадры диалога
+for frame in result.frames:
+    print(frame.text)
+```
+
+## Use cases
+
+- **Разработка** — быстро прогнать новый флоу без ручного кликанья в боте
+- **Отладка** — воспроизвести сложный сценарий с нужными переходами
+- **QA** — зафиксировать ожидаемые ответы и найти расхождения
+- **Рефакторинг** — убедиться, что поведение хендлеров не сломалось
