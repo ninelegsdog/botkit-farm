@@ -34,7 +34,7 @@ jobs:
       # parent, which is why main stayed green and every pull request went red.
       # This repository had no pull request before that, so the path was never
       # exercised.
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -162,7 +162,7 @@ jobs:
     steps:
       # Same reason as the check job above: a depth-1 checkout leaves no parent
       # commit for anything that asks for one.
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 

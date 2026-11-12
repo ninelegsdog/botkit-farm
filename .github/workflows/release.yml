@@ -41,7 +41,7 @@ jobs:
       contents: write  # создание релиза на GitHub
       id-token: write  # OIDC-токен для PyPI
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           # Полная история нужна релизным нотам и проверке тега.
           fetch-depth: 0

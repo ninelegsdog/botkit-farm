@@ -55,11 +55,11 @@ jobs:
       # Репозиторий бота — из вызывающего workflow, в отдельный каталог: ферма
       # копирует исходники в свой sandbox, и общий корень поставил бы копию
       # внутрь самой себя вместе с checkout'ом фермы.
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           path: bot
 
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           repository: ninelegsdog/botkit-farm
           path: farm
