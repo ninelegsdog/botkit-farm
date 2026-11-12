@@ -128,7 +128,7 @@ jobs:
       # Отчёт и кадр — единственное место, где видно, что именно упало.
       - name: Отчёты прогона
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: farm-smoke-${{ inputs.bot }}
           path: |
