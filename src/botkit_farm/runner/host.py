@@ -68,6 +68,7 @@ os.environ.update({{
     "DATABASE_URL": "sqlite+aiosqlite:///" + DB_PATH,
     "DB_PATH": DB_PATH,
     "REDIS_URL": {redis_url!r},
+    "TELEGRAM_API_BASE": f"http://127.0.0.1:{port}",
     "ADMIN_PASSWORD": "farm",
     "ADMIN_IDS": "424242",
     "WEBHOOK_URL": "",
@@ -256,7 +257,8 @@ async def main():
                 actor_cfg = ACTORS.get(role) if role else None
                 actor = None
                 if actor_cfg:
-                    actor = scene.actor_from_config(actor_cfg)
+                    from botkit_farm.scene import Actor
+                    actor = Actor(user_id=actor_cfg["user_id"], first_name=actor_cfg.get("name", "Иван"), is_bot=actor_cfg.get("is_bot", False))
                 chat_cfg = CHAT if CHAT else None
                 chat = None
                 if chat_cfg:
@@ -269,7 +271,8 @@ async def main():
                 actor_cfg = ACTORS.get(role) if role else None
                 actor = None
                 if actor_cfg:
-                    actor = scene.actor_from_config(actor_cfg)
+                    from botkit_farm.scene import Actor
+                    actor = Actor(user_id=actor_cfg["user_id"], first_name=actor_cfg.get("name", "Иван"), is_bot=actor_cfg.get("is_bot", False))
                 chat_cfg = CHAT if CHAT else None
                 chat = None
                 if chat_cfg:
@@ -291,23 +294,7 @@ async def main():
                                    "known": last_btns}})
                     uid += 1
                     continue
-                update = scene.to_callback(last_btns[pos], uid, actor=actor, chat=chat)
-            elif kind == "callback":
-                # Сырой callback_data (ТЗ: шаг callback). Кнопки с такими данными
-                # у бота не было — клиент подделывает нажатие, и проверяется
-                # отказ на подделку (IDOR). Поэтому поиск по `known` не нужен и
-                # `no_button` не строится: отсутствие кнопки — не ошибка шага.
-                role = step.get("as")
-                actor_cfg = ACTORS.get(role) if role else None
-                actor = None
-                if actor_cfg:
-                    actor = scene.actor_from_config(actor_cfg)
-                chat_cfg = CHAT if CHAT else None
-                chat = None
-                if chat_cfg:
-                    from botkit_farm.scene import ChatConfig
-                    chat = ChatConfig(id=scene.FAKE_CHAT_ID, type=chat_cfg.get("type", "private"), title=chat_cfg.get("title"), thread_id=chat_cfg.get("thread_id"), bot_username=chat_cfg.get("bot_username"))
-                update = scene.to_callback(value, uid, actor=actor, chat=chat)
+                update = scene.to_callback(last_btns[pos], uid)
             else:
                 data = value
                 # Определить актёра и чат для шага (ТЗ C3)
@@ -315,7 +302,8 @@ async def main():
                 actor_cfg = ACTORS.get(role) if role else None
                 actor = None
                 if actor_cfg:
-                    actor = scene.actor_from_config(actor_cfg)
+                    from botkit_farm.scene import Actor
+                    actor = Actor(user_id=actor_cfg["user_id"], first_name=actor_cfg.get("name", "Иван"), is_bot=actor_cfg.get("is_bot", False))
                 chat_cfg = CHAT if CHAT else None
                 chat = None
                 if chat_cfg:

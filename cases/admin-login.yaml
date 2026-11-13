@@ -1,0 +1,30 @@
+schema_version: 1
+id: admin-login
+title: Вход в админ-панель по паролю
+description: >-
+  Пользователь вызывает /admin, вводит верный пароль и попадает в админ-меню
+  с кнопками категорий, товаров, заказов и продаж.
+source: /home/algtro/BOTOGRAD_TECH/botkit-store
+builder: newgen
+fixture: admin_seed
+seed: true
+
+actors:
+  admin:
+    user_id: 424242
+    name: "Админ"
+
+tags: [smoke, ui]
+covers: admin-auth
+
+steps:
+  - send: "/admin"
+    as: admin
+    pause: 2.0
+    expect:
+      text_contains: ["Введите пароль"]
+  - send: "farm"
+    pause: 2.0
+    as: admin
+    expect:
+      text_contains: ["Добро пожаловать"]

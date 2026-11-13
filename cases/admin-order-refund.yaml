@@ -1,0 +1,54 @@
+schema_version: 1
+id: admin-order-refund
+title: Возврат Stars за заказ через админку
+description: >-
+  Админ открывает список заказов, находит оплаченный заказ, нажимает
+  «Вернуть (Stars)» и подтверждает возврат. Фейковый Telegram API должен
+  принять refundStarPayment.
+source: /home/algtro/BOTOGRAD_TECH/botkit-store
+builder: newgen
+fixture: admin_seed
+seed: true
+
+actors:
+  admin:
+    user_id: 424242
+    name: "Админ"
+
+tags: [regression, ui]
+covers: admin-order, refund
+
+steps:
+  - send: "/admin"
+    as: admin
+    pause: 2.0
+    expect:
+      text_contains: ["Введите пароль"]
+  - send: "farm"
+    pause: 2.0
+    as: admin
+    expect:
+      text_contains: ["Добро пожаловать"]
+  - send: "📦 Заказы"
+    pause: 2.0
+    as: admin
+    expect:
+      text_contains: ["Последние заказы"]
+      buttons_contains: ["#1 💰 100 Stars — Сертификат на 100 Stars"]
+  - click: "#1 💰 100 Stars — Сертификат на 100 Stars"
+    pause: 2.0
+    as: admin
+    expect:
+      text_contains: ["Сертификат на 100 Stars"]
+      buttons_contains: ["💸 Вернуть (Stars)"]
+  - click: "💸 Вернуть (Stars)"
+    pause: 2.0
+    as: admin
+    expect:
+      text_contains: ["Вернуть деньги (Stars)"]
+      buttons_contains: ["✅ Да", "❌ Нет"]
+  - click: "✅ Да"
+    pause: 2.0
+    as: admin
+    expect:
+      text_contains: ["помещён как возвращён"]

@@ -1,0 +1,42 @@
+schema_version: 1
+id: admin-category
+title: Управление категориями в админке
+description: >-
+  Админ открывает список категорий, заходит в карточку категории и проверяет
+  доступные действия: редактирование, переключение активности, удаление.
+source: /home/algtro/BOTOGRAD_TECH/botkit-store
+builder: newgen
+fixture: admin_seed
+seed: true
+
+actors:
+  admin:
+    user_id: 424242
+    name: "Админ"
+
+tags: [regression, ui]
+covers: admin-category
+
+steps:
+  - send: "/admin"
+    as: admin
+    pause: 2.0
+    expect:
+      text_contains: ["Введите пароль"]
+  - send: "farm"
+    pause: 2.0
+    as: admin
+    expect:
+      text_contains: ["Добро пожаловать"]
+  - send: "🗂 Категории"
+    pause: 2.0
+    as: admin
+    expect:
+      text_contains: ["🗂 Категории"]
+      buttons_contains: ["✅ Электроника (1)"]
+  - click: "✅ Электроника (1)"
+    pause: 2.0
+    as: admin
+    expect:
+      text_contains: ["Электроника"]
+      buttons_contains: ["✏️ Редактировать", "🔄 Активность", "🗑 Удалить", "🛍 Товары категории"]

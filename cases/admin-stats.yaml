@@ -1,0 +1,40 @@
+schema_version: 1
+id: admin-stats
+title: Статистика продаж и остатки ключей
+description: >-
+  Админ открывает статистику продаж и проверяет отображение выручки,
+  количества заказов и остатков ключей.
+source: /home/algtro/BOTOGRAD_TECH/botkit-store
+builder: newgen
+fixture: admin_seed
+seed: true
+
+actors:
+  admin:
+    user_id: 424242
+    name: "Админ"
+
+tags: [regression, ui]
+covers: admin-stats
+
+steps:
+  - send: "/admin"
+    as: admin
+    pause: 2.0
+    expect:
+      text_contains: ["Введите пароль"]
+  - send: "farm"
+    pause: 2.0
+    as: admin
+    expect:
+      text_contains: ["Добро пожаловать"]
+  - send: "📊 Продажи"
+    pause: 2.0
+    as: admin
+    expect:
+      text_contains: ["Продажи"]
+  - send: "⚠️ Остатки ключей"
+    pause: 2.0
+    as: admin
+    expect:
+      text_contains: ["низким остатком"]
