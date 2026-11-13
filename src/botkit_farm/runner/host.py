@@ -309,17 +309,23 @@ async def main():
                 if chat_cfg:
                     from botkit_farm.scene import ChatConfig
                     chat = ChatConfig(id=scene.FAKE_CHAT_ID, type=chat_cfg.get("type", "private"), title=chat_cfg.get("title"), thread_id=chat_cfg.get("thread_id"), bot_username=chat_cfg.get("bot_username"))
-                cb = None
-                for k, v in known.items():
-                    if v == data:
-                        cb = k
-                        break
-                if cb is None:
-                    turns.append({{"kind": "no_button", "label": data,
-                                   "known": sorted(set(known.values()))[:50]}})
-                    uid += 1
-                    continue
-                update = scene.to_callback(cb, uid, actor=actor, chat=chat)
+                if kind == "callback":
+                    # Сырой callback_data: посылаем как есть, без поиска по known.
+                    # Используется для IDOR/безопасностных проверок, когда у клиента
+                    # нет кнопки с такой data.
+                    update = scene.to_callback(data, uid, actor=actor, chat=chat)
+                else:
+                    cb = None
+                    for k, v in known.items():
+                        if v == data:
+                            cb = k
+                            break
+                    if cb is None:
+                        turns.append({{"kind": "no_button", "label": data,
+                                       "known": sorted(set(known.values()))[:50]}})
+                        uid += 1
+                        continue
+                    update = scene.to_callback(cb, uid, actor=actor, chat=chat)
             uid += 1
             before = len(rec.calls)
             try:

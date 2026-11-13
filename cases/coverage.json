@@ -273,6 +273,31 @@
       "bot": "botkit-support",
       "case": "support-close-and-rate.yaml",
       "why": "покрытие: support-flow — цепочка зависимых кнопок: закрытие и оценка (botkit-support)"
+    },
+    {
+      "bot": "botkit-store",
+      "case": "admin-login.yaml",
+      "why": "вход в админ-панель по паролю"
+    },
+    {
+      "bot": "botkit-store",
+      "case": "admin-category.yaml",
+      "why": "управление категориями"
+    },
+    {
+      "bot": "botkit-store",
+      "case": "admin-product.yaml",
+      "why": "управление товарами"
+    },
+    {
+      "bot": "botkit-store",
+      "case": "admin-order-refund.yaml",
+      "why": "возврат Stars за заказ"
+    },
+    {
+      "bot": "botkit-store",
+      "case": "admin-stats.yaml",
+      "why": "статистика и остатки ключей"
     }
   ]
 }

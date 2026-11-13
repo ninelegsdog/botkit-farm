@@ -55,7 +55,7 @@ steps:
   expect:
     text_contains:
     - "📦 Заказ #"
-    - "Статус: ⏳ pending_payment"
+    - "Статус: 💰 paid"
 - send: "🛒 Корзина"
   as: client
   expect:
