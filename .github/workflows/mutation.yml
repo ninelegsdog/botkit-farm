@@ -71,7 +71,7 @@ jobs:
         if: failure()
         run: mutmut results
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           # Артефакт — часть критерия приёмки B4: по нему видно, что порог
@@ -80,7 +80,7 @@ jobs:
           path: mutants/mutmut-cicd-stats.json
           if-no-files-found: warn
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: failure()
         with:
           name: mutation-diff
