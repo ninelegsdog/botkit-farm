@@ -6,10 +6,12 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from src.store import service
 
 
-async def seed(db) -> None:
+async def seed(db: Any) -> None:
     """Заполнить БД тестовыми данными для админ-потока."""
     # Категория
     cat_id = await service.create_category(db, "Электроника")
