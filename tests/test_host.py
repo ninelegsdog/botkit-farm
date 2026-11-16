@@ -360,3 +360,56 @@ def test_хост_строит_актёра_через_мост_а_не_сыро
     script_text = seen["script"]
     assert "scene.actor_from_config" in script_text
     assert "Actor(user_id=" not in script_text
+
+
+def test_песочница_видит_базовый_префикс_питона(tmp_path: pathlib.Path, monkeypatch) -> None:
+    """Бот под bwrap обязан видеть базовый префикс своего venv-питона.
+
+    stdlib и общая libpython живут в базовом префиксе, а песочница биндит только
+    каталоги прогона: на Ubuntu 26.04 системного libpython3.12 больше нет, и без
+    ro-bind бот умирал на загрузчике, до своего кода. Проверяем argv: ro-bind
+    префикса есть, а сам префикс не попал в каталоги на запись.
+    """
+    monkeypatch.setenv("BOTKIT_FARM_SANDBOX", "1")
+    monkeypatch.setattr(
+        host.sandbox.shutil,
+        "which",
+        lambda name, *a, **kw: "/usr/bin/bwrap" if name == "bwrap" else None,
+    )
+    base_bin = tmp_path / "base" / "bin"
+    base_bin.mkdir(parents=True)
+    env_dir = tmp_path / "envs" / "store-x"
+    (env_dir / "bin").mkdir(parents=True)
+    (env_dir / "pyvenv.cfg").write_text(f"home = {base_bin}\n", encoding="utf-8")
+
+    seen: dict[str, object] = {}
+
+    def fake_run(cmd: list[str], **kw: object) -> SimpleNamespace:
+        seen["cmd"] = cmd
+        script = pathlib.Path(cmd[-1])
+        (script.parent / "result.json").write_text("[]", encoding="utf-8")
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(host.subprocess, "run", fake_run)
+
+    host.run_bot(
+        farm_src=tmp_path,
+        bot_python=env_dir / "bin" / "python",
+        bot_dir=tmp_path / "bot",
+        adapter_module="botkit_farm.adapters.newgen",
+        adapter_attr="build",
+        raw=False,
+        mode="polling",
+        port=8400,
+        fixture=None,
+        steps=[],
+        db_path=tmp_path / "b.db",
+        env_root=tmp_path / "envs",
+    )
+
+    cmd = seen["cmd"]
+    assert pathlib.Path(cmd[0]).name == "bwrap"
+    ro = [cmd[i + 1] for i, a in enumerate(cmd) if a == "--ro-bind"]
+    assert str((tmp_path / "base").resolve()) in ro
+    rw = [cmd[i + 1] for i, a in enumerate(cmd) if a == "--bind"]
+    assert str((tmp_path / "base").resolve()) not in rw

@@ -26,6 +26,7 @@ from dataclasses import dataclass, field
 
 from pydantic import ValidationError
 
+from botkit_farm import env as env_mod
 from botkit_farm import sandbox, security
 from botkit_farm.runner.contract import HostTurn, parse_turns
 
@@ -505,11 +506,19 @@ def run_bot(
 
         # Под песочницей видны только каталоги прогона: код бота, его venv, база,
         # протокол хоста и исходники фермы (из них хост импортирует подделку API).
+        # Плюс базовый префикс интерпретатора на чтение: venv-питон берёт оттуда
+        # stdlib и общую libpython — на Ubuntu 26.04 системного libpython3.12
+        # больше нет, и без этого бинда бот умирал на загрузчике, до своего кода.
         binds = [bot_dir, db_path.parent, tmpdir, farm_src]
         if env_root is not None:
             binds.append(env_root)
+        base_prefix = env_mod.base_prefix_of(bot_python)
+        ro_binds = [base_prefix] if base_prefix is not None else []
         cmd = sandbox.wrap_or_passthrough(
-            [str(bot_python), str(host_file)], binds=binds, chdir=bot_dir
+            [str(bot_python), str(host_file)],
+            binds=binds,
+            chdir=bot_dir,
+            ro_binds=ro_binds,
         )
 
         security.block_egress()

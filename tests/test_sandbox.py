@@ -108,6 +108,25 @@ def test_системные_каталоги_только_на_чтение(tmp_
     assert "/etc" not in ro
 
 
+def test_дополнительные_каталоги_только_на_чтение(tmp_path) -> None:
+    """ro_binds — базовый префикс питона: боту виден, но не переписываем."""
+    base = tmp_path / "base"
+    base.mkdir()
+
+    argv = sandbox.wrap(["python", "host.py"], binds=[tmp_path], ro_binds=[base])
+
+    ro = [argv[i + 1] for i, a in enumerate(argv) if a == "--ro-bind"]
+    assert str(base.resolve()) in ro
+
+
+def test_без_ro_binds_рабочий_каталог_остаётся_на_запись(tmp_path) -> None:
+    """Отрицательный случай: без ro_binds рабочий каталог не превращается в ro."""
+    argv = sandbox.wrap(["python", "host.py"], binds=[tmp_path])
+
+    ro = [argv[i + 1] for i, a in enumerate(argv) if a == "--ro-bind"]
+    assert str(tmp_path.resolve()) not in ro
+
+
 def test_сеть_остаётся_общей(tmp_path) -> None:
     """Фейковый API и Redis живут на loopback снаружи namespace."""
     argv = sandbox.wrap(["python", "host.py"], binds=[tmp_path])

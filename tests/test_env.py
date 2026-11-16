@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import pathlib
+import venv
 from types import SimpleNamespace
 from typing import Any
 
@@ -161,6 +162,55 @@ def test_сборка_берётся_под_блокировку(tmp_path, сб�
     env.ensure_env(bot, cache)
 
     assert (cache / f".{env.env_dir_name(bot)}.lock").exists()
+
+
+def test_окружение_собирается_со_ссылкой_а_не_копией(tmp_path, monkeypatch) -> None:
+    """venv-питон — ссылка на базовый интерпретатор, не копия.
+
+    Копия теряет $ORIGIN-контекст и не находит общую libpython базового питона:
+    на Ubuntu 26.04 её нет и в /usr, поэтому под песочницей бот умирал на
+    загрузчике. Контрольная сборка с дефолтным EnvBuilder показывает, что
+    свойство не было свободным — дефолт даёт копию, а не ссылку.
+    """
+    monkeypatch.setattr(security, "allow_egress", lambda: None)
+    monkeypatch.setattr(security, "block_egress", lambda: None)
+    bot = _bot(tmp_path / "bot", pyproject="[project]\n")  # без зависимостей pip не зовётся
+    cache = tmp_path / "envs"
+
+    result = env.ensure_env(bot, cache)
+
+    assert result.python.is_symlink()
+
+    control = tmp_path / "control"
+    venv.EnvBuilder(with_pip=False, clear=True).create(control)
+    assert not (control / "bin" / "python").is_symlink()
+
+
+# ── base_prefix_of ──────────────────────────────────────────────────────────
+
+
+def test_базовый_префикс_читается_из_pyvenv_cfg(tmp_path) -> None:
+    base_bin = tmp_path / "base" / "bin"
+    base_bin.mkdir(parents=True)
+    env_dir = tmp_path / "envs" / "store-abc"
+    (env_dir / "bin").mkdir(parents=True)
+    (env_dir / "pyvenv.cfg").write_text(f"home = {base_bin}\n", encoding="utf-8")
+
+    assert env.base_prefix_of(env_dir / "bin" / "python") == tmp_path / "base"
+
+
+def test_без_pyvenv_cfg_биндить_нечего(tmp_path) -> None:
+    """Питон без pyvenv.cfg сам себе база — отдельный бинд не нужен."""
+    assert env.base_prefix_of(tmp_path / "py") is None
+
+
+def test_битый_home_даёт_отсутствие_префикса(tmp_path) -> None:
+    """home из pyvenv.cfg указывает в никуда — префикса нет, бинд не строится."""
+    env_dir = tmp_path / "envs" / "store-abc"
+    (env_dir / "bin").mkdir(parents=True)
+    (env_dir / "pyvenv.cfg").write_text("home = /несуществующий/bin\n", encoding="utf-8")
+
+    assert env.base_prefix_of(env_dir / "bin" / "python") is None
 
 
 # ── python_of ───────────────────────────────────────────────────────────────
