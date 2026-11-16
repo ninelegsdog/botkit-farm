@@ -258,8 +258,7 @@ async def main():
                 actor_cfg = ACTORS.get(role) if role else None
                 actor = None
                 if actor_cfg:
-                    from botkit_farm.scene import Actor
-                    actor = Actor(user_id=actor_cfg["user_id"], first_name=actor_cfg.get("name", "Иван"), is_bot=actor_cfg.get("is_bot", False))
+                    actor = scene.actor_from_config(actor_cfg)
                 chat_cfg = CHAT if CHAT else None
                 chat = None
                 if chat_cfg:
@@ -272,8 +271,7 @@ async def main():
                 actor_cfg = ACTORS.get(role) if role else None
                 actor = None
                 if actor_cfg:
-                    from botkit_farm.scene import Actor
-                    actor = Actor(user_id=actor_cfg["user_id"], first_name=actor_cfg.get("name", "Иван"), is_bot=actor_cfg.get("is_bot", False))
+                    actor = scene.actor_from_config(actor_cfg)
                 chat_cfg = CHAT if CHAT else None
                 chat = None
                 if chat_cfg:
@@ -303,8 +301,7 @@ async def main():
                 actor_cfg = ACTORS.get(role) if role else None
                 actor = None
                 if actor_cfg:
-                    from botkit_farm.scene import Actor
-                    actor = Actor(user_id=actor_cfg["user_id"], first_name=actor_cfg.get("name", "Иван"), is_bot=actor_cfg.get("is_bot", False))
+                    actor = scene.actor_from_config(actor_cfg)
                 chat_cfg = CHAT if CHAT else None
                 chat = None
                 if chat_cfg:

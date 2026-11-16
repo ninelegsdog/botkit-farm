@@ -319,8 +319,8 @@ def test_шаг_callback_доходит_до_хоста_как_сырые_дан
     )
 
     assert seen["steps"] == steps
-    assert 'elif kind == "callback":' in seen["script"]
-    assert "scene.to_callback(value, uid" in seen["script"]
+    assert 'if kind == "callback":' in seen["script"]
+    assert "scene.to_callback(data, uid" in seen["script"]
 
 
 def test_хост_строит_актёра_через_мост_а_не_сырой_актёр(
