@@ -70,6 +70,10 @@ def deps_digest(repo: pathlib.Path) -> str:
     """
     h = hashlib.sha256()
     h.update(f"cp{sys.version_info.major}.{sys.version_info.minor}\0".encode())
+    # Режим сборки — тоже часть окружения: venv'ы, собранные копией бинарника,
+    # не должны переиспользоваться после перехода на ссылки — копия не находит
+    # общую libpython базового питона под песочницей (см. ensure_env).
+    h.update(b"venv-link\0")
     for fname in _DEP_FILES:
         path = repo / fname
         if path.exists():
@@ -127,7 +131,14 @@ def ensure_env(repo: pathlib.Path, cache: pathlib.Path, *, timeout: int = 900) -
             return Env(path=env_dir, python=py, created=False)
         security.allow_egress()  # установка пакетов требует сети
         try:
-            venv.EnvBuilder(with_pip=True, clear=True).create(env_dir)
+            # symlinks, а не копии (дефолт EnvBuilder — копии): у shared-сборок
+            # питона (toolcache в CI) скопированный бинарник ищет libpython в
+            # $ORIGIN/../lib, которого у venv нет, — под песочницей (в namespace
+            # не попадает ни базовый префикс, ни системный libpython из-за
+            # образа Ubuntu 26.04) он умирает ещё до своего кода. Ссылка держит
+            # $ORIGIN в префиксе базового питона; этот же префикс host.py читает
+            # из pyvenv.cfg и добавляет в песочницу на чтение (base_prefix_of).
+            venv.EnvBuilder(with_pip=True, clear=True, symlinks=True).create(env_dir)
             root = _project_root(repo)
             if root is not None:
                 args = [str(py), "-m", "pip", "install", "--quiet", "--disable-pip-version-check"]
@@ -158,6 +169,28 @@ def _run(args: list[str], *, timeout: int, what: str) -> None:
         raise security.SecurityError(f"{what} не установились:\n" + "\n".join(tail))
 
 
+def base_prefix_of(python: pathlib.Path) -> pathlib.Path | None:
+    """Префикс базового интерпретатора окружения бота (для песочницы).
+
+    Бот запускается в venv, но stdlib и общая libpython живут в базовом
+    префиксе, а песочница биндит только каталоги прогона — базовый префикс
+    обязан попасть в неё отдельно, иначе venv-питон не стартует. Читаем `home`
+    из pyvenv.cfg — тем же способом, каким сам venv-питон вычисляет свой
+    префикс. Нет pyvenv.cfg — питон и есть база, биндить нечего.
+    """
+    cfg = python.parent.parent / "pyvenv.cfg"
+    if not cfg.is_file():
+        return None
+    for line in cfg.read_text(encoding="utf-8").splitlines():
+        key, _, value = line.partition("=")
+        if key.strip() == "home":
+            home = pathlib.Path(value.strip())
+            if home.is_dir():
+                return home.parent
+            return None
+    return None
+
+
 def python_of(repo: pathlib.Path, cache: pathlib.Path) -> pathlib.Path:
     """Интерпретатор окружения бота (без установки — что уже есть)."""
     env_dir = security.safe_join(cache, env_dir_name(repo))
@@ -165,4 +198,4 @@ def python_of(repo: pathlib.Path, cache: pathlib.Path) -> pathlib.Path:
     return py if py.exists() else pathlib.Path(sys.executable)
 
 
-__all__ = ["Env", "deps_digest", "ensure_env", "env_dir_name", "python_of"]
+__all__ = ["Env", "base_prefix_of", "deps_digest", "ensure_env", "env_dir_name", "python_of"]

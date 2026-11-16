@@ -117,12 +117,16 @@ def wrap(
     *,
     binds: Sequence[pathlib.Path],
     chdir: pathlib.Path | None = None,
+    ro_binds: Sequence[pathlib.Path] = (),
 ) -> list[str]:
     """Обернуть команду в bubblewrap.
 
     `binds` — каталоги, которые бот увидит на тех же путях и с теми же правами.
     Пути монтируются по именам, а не «куда получилось»: бот читает свой `pyproject`,
     и переезд его сломал бы так же, как отсутствие.
+
+    `ro_binds` — то же, но на чтение: базовый префикс питона нужен боту, чтобы
+    стартовать (stdlib и общая libpython), переписывать его бот не должен.
     """
     argv = [_abs("bwrap")]
     for system in _SYSTEM_DIRS:
@@ -131,6 +135,9 @@ def wrap(
     for path in binds:
         resolved = pathlib.Path(path).resolve()
         argv += ["--bind", str(resolved), str(resolved)]
+    for path in ro_binds:
+        resolved = pathlib.Path(path).resolve()
+        argv += ["--ro-bind", str(resolved), str(resolved)]
     argv += [
         "--dev",
         "/dev",
@@ -154,6 +161,7 @@ def wrap_or_passthrough(
     binds: Sequence[pathlib.Path],
     chdir: pathlib.Path | None = None,
     env: dict[str, str] | None = None,
+    ro_binds: Sequence[pathlib.Path] = (),
 ) -> list[str]:
     """Обернуть команду, если песочница включена; иначе выполнить как есть.
 
@@ -171,7 +179,7 @@ def wrap_or_passthrough(
             f"(apt install bubblewrap), либо снимите переменную — прогон пойдёт "
             f"без песочницы."
         )
-    return wrap(cmd, binds=binds, chdir=chdir)
+    return wrap(cmd, binds=binds, chdir=chdir, ro_binds=ro_binds)
 
 
 def describe() -> str:

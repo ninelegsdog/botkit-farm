@@ -127,7 +127,6 @@
       "exemptions": {
         "Dockerfile": "The harness imports the bot under test in-process.",
         "docker-compose.yml": "No service.",
-        ".github/dependabot.yml": "Absent today. Recorded as a known gap in the README Status block rather than papered over.",
         ".env.example": "The harness reads no environment variables: Redis is addressed by port on the command line, and there is no secret to template. An .env.example with nothing in it would be a file that teaches the wrong thing."
       },
       "optional": [

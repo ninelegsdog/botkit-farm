@@ -2,6 +2,31 @@
   "schema_version": 1,
   "regressions": [
     {
+      "id": "admin-category",
+      "case": "admin-category.yaml",
+      "why": "покрытие: store-admin — категории: карточка, редактирование, активность, удаление (botkit-store)"
+    },
+    {
+      "id": "admin-login",
+      "case": "admin-login.yaml",
+      "why": "покрытие: store-admin — вход в админку по паролю и меню админки (botkit-store)"
+    },
+    {
+      "id": "admin-order-refund",
+      "case": "admin-order-refund.yaml",
+      "why": "покрытие: store-admin — возврат Stars за оплаченный заказ (botkit-store)"
+    },
+    {
+      "id": "admin-product",
+      "case": "admin-product.yaml",
+      "why": "покрытие: store-admin — товары: карточка, пополнение ключей, активность, удаление (botkit-store)"
+    },
+    {
+      "id": "admin-stats",
+      "case": "admin-stats.yaml",
+      "why": "покрытие: store-admin — статистика продаж и остатки ключей (botkit-store)"
+    },
+    {
       "id": "booking-cancel-releases-slot",
       "case": "booking-cancel-releases-slot.yaml",
       "why": "покрытие: bookingbot — отмена записи снимает её и освобождает слот"
